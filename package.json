@@ -31,7 +31,8 @@
     "format": "bun run lint --fix",
     "lint": "eslint --cache .",
     "prepack": "bun run build",
-    "release": "bun lint && bun typecheck && vitest && bun run build && bumpp",
+    "check": "bun lint && bun typecheck && vitest && bun run build",
+    "release": "bun run check && bumpp",
     "start": "bun run ./src/index.ts",
     "test": "vitest",
     "typecheck": "tsc --noEmit"

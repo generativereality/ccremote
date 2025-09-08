@@ -163,8 +163,9 @@ bun install
 
 # Development commands
 bun run dev start --name test       # Run in development mode
+bun run check                       # Run tests, lint, type checks etc
 bun run build                       # Build for production
-bun run test                        # Run tests
+bun run test                        # Run tests, list,
 bun run lint                        # Lint code
 bun run typecheck                   # Type checking
 ```

@@ -14,7 +14,8 @@ ccremote is a CLI tool that provides remote control for Claude Code sessions wit
 - `bun run test` - Run tests with vitest
 - `bun run lint` - Lint code with ESLint
 - `bun run typecheck` - Type check with TypeScript compiler
-- `bun run release` - Full release process (lint + typecheck + test + build + version bump)
+- `bun run check` - All checks (lint + typecheck + test + build)
+- `bun run release` - Full release process (all checks + version bump)
 
 ### Testing
 - Tests are located alongside source files using vitest's in-source testing
@@ -96,8 +97,6 @@ CCREMOTE_AUTO_RESTART=true                     # Auto-restart on failure
 ## Development Workflow
 
 1. Make changes to source files in `src/`
-2. Run `bun run typecheck` to verify types
-3. Run `bun run test` to run tests
-4. Run `bun run lint` to check code style
-5. Use `bun run dev` for local testing of CLI commands
-6. Build with `bun run build` before publishing
+2. Run `bun run check` to verify types, run tests, lint etc
+3. Use `bun run dev` for local testing of CLI commands
+4. Build with `bun run build` before publishing
