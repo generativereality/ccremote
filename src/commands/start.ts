@@ -102,17 +102,39 @@ export const startCommand = define({
 			consola.info('');
 			consola.info('Note: Monitoring continues in the background!');
 
-			// Set up monitoring event handlers
+			// Create log file for monitoring output
+			const logFile = `.ccremote/session-${session.id}.log`;
+			const fs = await import('node:fs/promises');
+			await fs.writeFile(logFile, `ccremote session ${session.id} started at ${new Date().toISOString()}\n`);
+
+			// Set up monitoring event handlers (write to log instead of console after attach)
+			let attachedToTmux = false;
+			
 			monitor.on('limit_detected', (event) => {
-				consola.warn(`🚫 Usage limit detected for ${event.sessionId}`);
+				const message = `🚫 Usage limit detected for ${event.sessionId}`;
+				if (attachedToTmux) {
+					void fs.appendFile(logFile, `${new Date().toISOString()} ${message}\n`);
+				} else {
+					consola.warn(message);
+				}
 			});
 
 			monitor.on('continuation_ready', (event) => {
-				consola.info(`✅ Auto-continuing session ${event.sessionId}`);
+				const message = `✅ Auto-continuing session ${event.sessionId}`;
+				if (attachedToTmux) {
+					void fs.appendFile(logFile, `${new Date().toISOString()} ${message}\n`);
+				} else {
+					consola.info(message);
+				}
 			});
 
 			monitor.on('error', (event) => {
-				consola.error(`❌ Monitor error for ${event.sessionId}:`, event.data?.error);
+				const message = `❌ Monitor error for ${event.sessionId}: ${event.data?.error}`;
+				if (attachedToTmux) {
+					void fs.appendFile(logFile, `${new Date().toISOString()} ${message}\n`);
+				} else {
+					consola.error(message);
+				}
 			});
 
 			// Start monitoring in the background
@@ -129,8 +151,12 @@ export const startCommand = define({
 			consola.info('');
 			consola.info('🔄 Attaching to Claude Code session in 3 seconds...');
 			consola.info('   (Press Ctrl+B then D to detach and return to monitoring)');
+			consola.info(`   Monitoring logs: ${logFile}`);
 			
 			await new Promise(resolve => setTimeout(resolve, 3000));
+			
+			// Set flag to redirect output to logs
+			attachedToTmux = true;
 			
 			// Attach to the tmux session
 			const { spawn } = await import('node:child_process');
@@ -141,12 +167,15 @@ export const startCommand = define({
 			});
 			
 			attachProcess.on('exit', (code) => {
+				attachedToTmux = false; // Resume console output when detached
+				
 				if (code === 0) {
 					consola.info('');
 					consola.info('👋 Detached from tmux session');
 					consola.info(`   Session ${session.id} is still running and being monitored`);
 					consola.info(`   Reattach anytime with: tmux attach -t ${session.tmuxSession}`);
 					consola.info(`   Stop session with: ccremote stop ${session.id}`);
+					consola.info(`   View logs: tail -f ${logFile}`);
 					consola.info('');
 					consola.info('🔄 Monitoring continues...');
 					
