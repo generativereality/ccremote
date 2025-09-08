@@ -1,0 +1,177 @@
+<div align="center">
+    <h1>ccremote</h1>
+</div>
+
+<p align="center">
+    <a href="https://npmjs.com/package/ccremote"><img src="https://img.shields.io/npm/v/ccremote?color=yellow" alt="npm version" /></a>
+    <a href="https://packagephobia.com/result?p=ccremote"><img src="https://packagephobia.com/badge?p=ccremote" alt="install size" /></a>
+</p>
+
+> Remote Claude Code control with auto-continuation and Discord notifications
+
+Monitor your Claude Code sessions automatically, continue when usage limits reset, and get Discord notifications when attention is needed.
+
+## Installation
+
+### Quick Start (Recommended)
+
+```bash
+# Using bunx (recommended for speed)
+bunx ccremote@latest start
+
+# Using npx
+npx ccremote@latest start
+
+# Using bun
+bun dlx ccremote@latest start
+```
+
+### Local Installation (Optional)
+
+```bash
+# Install globally
+npm install -g ccremote
+
+# Or with bun
+bun install -g ccremote
+```
+
+## Quick Setup
+
+1. **Initialize Configuration**:
+   ```bash
+   ccremote init                    # Creates ccremote.env in current directory
+   ccremote init --global           # Creates ~/.ccremote.env globally
+   ```
+
+2. **Create a Discord Bot**:
+   - Go to [Discord Developer Portal](https://discord.com/developers/applications)
+   - Create a new application and bot
+   - Copy the bot token and your Discord user ID
+
+3. **Configure ccremote**:
+   Edit the created `ccremote.env` file:
+   ```bash
+   CCREMOTE_DISCORD_BOT_TOKEN=your_bot_token_here
+   CCREMOTE_DISCORD_OWNER_ID=your_discord_user_id
+   ```
+
+4. **Start a Monitored Session**:
+   ```bash
+   ccremote start --name "my-session"
+   ```
+   This automatically creates and attaches to a tmux session with Claude Code running.
+
+5. **Work Normally**:
+   - Use Claude Code as usual in the attached session
+   - ccremote monitors in the background and will automatically continue when limits reset
+   - Get Discord notifications about session status
+
+## Usage
+
+```bash
+# Initialize configuration
+ccremote init                            # Create project ccremote.env
+ccremote init --global                   # Create global ~/.ccremote.env  
+ccremote init --force                    # Overwrite existing config
+
+# Start a new monitored session
+ccremote start                           # Auto-generated name
+ccremote start --name "my-session"       # Custom name
+ccremote start --channel "channel_id"    # Use specific Discord channel
+
+# Manage sessions
+ccremote list                            # List all sessions
+ccremote status ccremote-1               # Show session details
+ccremote stop ccremote-1                 # Stop session
+ccremote stop ccremote-1 --force         # Force stop even if active
+
+# Manual tmux access (if needed)
+tmux attach -t ccremote-1                # Attach to existing session
+tmux list-sessions                       # List all tmux sessions
+```
+
+## How It Works
+
+1. **Smart Monitoring**: ccremote polls your tmux session every 2 seconds, analyzing output for Claude Code limit messages
+2. **Auto-Continuation**: When a usage limit is detected, ccremote waits for the limit to reset (typically 5 hours) and automatically continues your session
+3. **Discord Notifications**: Get real-time updates about your sessions:
+   - 🚫 Usage limit reached
+   - ✅ Session automatically continued
+   - ❌ Errors or session ended
+4. **Seamless Integration**: Works with your existing Claude Code workflow - the start command automatically attaches you to the session
+
+## Features
+
+- 🔄 **Automatic Continuation**: Automatically continue your Claude Code sessions when usage limits reset
+- 💬 **Discord Integration**: Real-time notifications via Discord DM or channel
+- 📱 **Session Management**: Create, list, monitor, and stop multiple sessions
+- 🖥️ **Tmux Integration**: Seamless tmux session management with proper cleanup
+- 🎯 **Pattern Detection**: Intelligent detection of usage limits, errors, and continuation opportunities
+- ⚡ **Smart Polling**: Efficient monitoring with configurable intervals and retry logic
+- 🔒 **Secure**: Environment-based configuration, no hardcoded credentials
+
+## Configuration
+
+ccremote supports multiple configuration methods with the following priority (highest to lowest):
+
+1. **Environment variables** (prefixed with `CCREMOTE_`)
+2. **Project config**: `./ccremote.env` 
+3. **Project config**: `./.env`
+4. **Global config**: `~/.ccremote.env`
+
+### Required Settings
+
+```bash
+# Required: Discord Bot Configuration  
+CCREMOTE_DISCORD_BOT_TOKEN=your_discord_bot_token
+CCREMOTE_DISCORD_OWNER_ID=your_discord_user_id
+
+# Optional: Additional authorized users (comma-separated)
+CCREMOTE_DISCORD_AUTHORIZED_USERS=user_id1,user_id2
+
+# Optional: Monitoring Configuration
+CCREMOTE_MONITORING_INTERVAL=2000    # Polling interval in milliseconds
+CCREMOTE_MAX_RETRIES=3               # Max retry attempts on error  
+CCREMOTE_AUTO_RESTART=true           # Auto-restart monitoring on failure
+```
+
+### Privacy Model
+
+- **Per-user bots**: Each user should create their own Discord bot for privacy
+- **Per-project bots**: For client work, create separate bots per project/organization
+- **Project-specific config**: Use `ccremote.env` in each project directory
+- **Global config**: Use `~/.ccremote.env` for personal/default settings
+
+## Discord Setup
+
+1. **Create Bot**: Go to Discord Developer Portal → New Application → Bot
+2. **Get Token**: Copy the bot token from the Bot section  
+3. **Get User ID**: Enable Developer Mode in Discord → Right-click your profile → Copy User ID
+4. **Invite Bot**: Use OAuth2 URL Generator to create invite link with bot permissions
+
+## Requirements
+
+- **Node.js** 20.19.4 or higher
+- **tmux** (for session management)
+- **Discord bot** (for notifications)
+
+## Development
+
+```bash
+# Clone and install
+git clone <repo>
+cd ccremote
+bun install
+
+# Development commands
+bun run dev start --name test       # Run in development mode
+bun run build                       # Build for production
+bun run test                        # Run tests
+bun run lint                        # Lint code
+bun run typecheck                   # Type checking
+```
+
+## License
+
+MIT

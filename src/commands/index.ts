@@ -1,18 +1,20 @@
 import process from 'node:process';
 import { cli } from 'gunshi';
 import { description, name, version } from '../../package.json';
+import { initCommand } from './init.js';
 import { listCommand } from './list.js';
 import { startCommand } from './start.js';
 import { statusCommand } from './status.js';
 import { stopCommand } from './stop.js';
 
 // Re-export all commands for easy importing
-export { listCommand, startCommand, statusCommand, stopCommand };
+export { initCommand, listCommand, startCommand, statusCommand, stopCommand };
 
 /**
  * Command entries as tuple array
  */
 export const subCommandUnion = [
+	['init', initCommand],
 	['start', startCommand],
 	['list', listCommand],
 	['stop', stopCommand],

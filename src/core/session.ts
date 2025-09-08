@@ -157,9 +157,9 @@ if (import.meta.vitest) {
 			expect(session1.id).toBe('ccremote-1');
 			expect(session1.name).toBe('session-1');
 
-			const session2 = await sessionManager.createSession('my-project');
+			const session2 = await sessionManager.createSession('my-session');
 			expect(session2.id).toBe('ccremote-2');
-			expect(session2.name).toBe('my-project');
+			expect(session2.name).toBe('my-session');
 		});
 
 		it('should persist sessions across instances', async () => {

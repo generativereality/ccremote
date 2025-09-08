@@ -1,6 +1,8 @@
 node_modules/
 dist/
 .env
+.env.local
+ccremote.env
 .ccremote/
 *.log
 .DS_Store

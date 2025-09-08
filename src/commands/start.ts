@@ -1,5 +1,6 @@
 import { consola } from 'consola';
 import { define } from 'gunshi';
+import { loadConfig, validateConfig } from '../core/config.js';
 import { DiscordBot } from '../core/discord.js';
 import { Monitor } from '../core/monitor.js';
 import { SessionManager } from '../core/session.js';
@@ -22,16 +23,24 @@ export const startCommand = define({
 		const { name, channel } = ctx.values;
 		consola.start('Starting ccremote session...');
 
-		// Check environment variables
-		const discordToken = process.env.DISCORD_BOT_TOKEN;
-		const discordOwnerId = process.env.DISCORD_OWNER_ID;
-
-		if (!discordToken || !discordOwnerId) {
-			consola.error('Missing required environment variables:');
-			consola.error('   DISCORD_BOT_TOKEN - Your Discord bot token');
-			consola.error('   DISCORD_OWNER_ID - Your Discord user ID');
+		// Load and validate configuration
+		let config;
+		try {
+			config = loadConfig();
+			validateConfig(config);
+		}
+		catch (error) {
+			consola.error('Configuration error:', error instanceof Error ? error.message : error);
 			consola.error('');
-			consola.error('Create a .env file with these values or set them as environment variables');
+			consola.error('Please ensure you have set the required environment variables:');
+			consola.error('   CCREMOTE_DISCORD_BOT_TOKEN - Your Discord bot token');
+			consola.error('   CCREMOTE_DISCORD_OWNER_ID - Your Discord user ID');
+			consola.error('');
+			consola.error('You can set these in:');
+			consola.error('   - Environment variables');
+			consola.error('   - Project ccremote.env file');
+			consola.error('   - Project .env file');
+			consola.error('   - Global ~/.ccremote.env file');
 			process.exit(1);
 		}
 
@@ -40,7 +49,11 @@ export const startCommand = define({
 			const sessionManager = new SessionManager();
 			const tmuxManager = new TmuxManager();
 			const discordBot = new DiscordBot();
-			const monitor = new Monitor(sessionManager, tmuxManager, discordBot);
+			const monitor = new Monitor(sessionManager, tmuxManager, discordBot, {
+				pollInterval: config.monitoringInterval,
+				maxRetries: config.maxRetries,
+				autoRestart: config.autoRestart,
+			});
 
 			await sessionManager.initialize();
 
@@ -60,8 +73,7 @@ export const startCommand = define({
 
 			// Start Discord bot
 			consola.info('Starting Discord bot...');
-			const authorizedUsers = process.env.DISCORD_AUTHORIZED_USERS?.split(',') || [];
-			await discordBot.start(discordToken, discordOwnerId, authorizedUsers);
+			await discordBot.start(config.discordBotToken, config.discordOwnerId, config.discordAuthorizedUsers);
 
 			// Set up Discord channel
 			let channelId = channel;
