@@ -2,7 +2,7 @@
 
 ## 📋 **Project Overview**
 
-**CCRemote** is a minimalistic Claude Code remote control package that provides automated continuation and remote approval features via Discord integration. Built on the modern tech stack from ccusage, it focuses exclusively on tmux monitoring-based features without dependency on Claude Code hooks.
+**CCRemote** is a minimalistic Claude Code remote control package that provides automated continuation and remote approval features via Discord/Slack integration. Built on modern, simple architecture inspired by ccusage, it focuses exclusively on tmux monitoring-based features without dependency on Claude Code hooks or complex integrations.
 
 ---
 
@@ -13,35 +13,46 @@
 - **Clean Structure**: ccusage-based architecture with TypeScript, Gunshi CLI, modern build tools
 - **Working Demos**: Features implemented in `features/` directory
 
-### **❌ What Needs to Change:**
-- **Remove ccusage-specific functionality**: Cost analysis, usage tracking, pricing data
-- **Replace Telegram with Discord**: All notifications and interactions via Discord bot
-- **Simplify scope**: Focus only on the two core tmux-monitoring features
-- **Rebrand completely**: ccremote identity, domain, and package name
+### **❌ What Claude-Code-Remote Analysis Revealed:**
+- **Too bloated**: Unnecessary integrations (email, Line, complex hooks)
+- **Hook dependency issues**: Cumbersome to configure, unreliable
+- **Over-engineered**: Multiple notification channels, complex state management
+- **Not our use case**: Features we don't need (email workflows, complex scheduling)
+
+### **✅ Our Simplified Approach:**
+- **Discord/Slack first**: Start with Discord, add Slack support later
+- **Tmux-only monitoring**: No hook dependencies, just tmux pane monitoring
+- **Minimal features**: Auto-continuation, remote approvals, early window scheduling
+- **Simple scheduler**: Basic polling with smart intervals, no complex alarm systems
+- **ccusage-inspired structure**: Clean TypeScript, modern tooling, simple architecture
 
 ---
 
 ## 🎯 **Target Architecture**
 
-### **Package Structure:**
+### **Simplified Package Structure:**
 ```
 ccremote/
 ├── src/
 │   ├── commands/
 │   │   ├── index.ts              # Main CLI entry point
-│   │   ├── auto-continuation.ts  # Auto-continuation daemon command
-│   │   └── remote-approval.ts    # Remote approval daemon command
+│   │   ├── monitor.ts            # Combined monitoring daemon
+│   │   └── schedule.ts           # Early window scheduling
 │   ├── core/
-│   │   ├── tmux-monitor.ts       # Tmux session monitoring utilities
-│   │   ├── discord-client.ts     # Discord bot integration
-│   │   ├── time-parser.ts        # Time parsing for continuation scheduling
-│   │   └── approval-handler.ts   # Approval workflow management
+│   │   ├── tmux.ts               # Simple tmux monitoring & injection
+│   │   ├── discord.ts            # Discord bot (webhook + interactions)
+│   │   ├── slack.ts              # Slack bot (future)
+│   │   ├── scheduler.ts          # Simple polling scheduler
+│   │   └── parser.ts             # Time/pattern parsing utilities
 │   ├── types/
 │   │   └── index.ts              # TypeScript type definitions
 │   └── index.ts                  # Package exports
-├── config-schema.json           # Configuration schema for validation
-├── package.json                 # Package metadata and dependencies
-└── README.md                   # Documentation and usage guide
+├── website/                     # Simple documentation site
+│   ├── index.html              # Landing page
+│   ├── setup.html              # Setup guide
+│   └── examples.html           # Usage examples
+├── package.json                # Package metadata
+└── README.md                   # Main documentation
 ```
 
 ### **Tech Stack (Inherited from ccusage):**
@@ -54,180 +65,160 @@ ccremote/
 
 ---
 
-## 🔧 **Core Features Implementation**
+## 🔧 **Core Features (Simplified)**
 
-### **1. Auto-Continuation Daemon**
+### **1. Combined Monitoring Daemon**
 
-**Purpose**: Monitor tmux sessions for Claude usage limit messages and automatically continue when limits reset.
-
-**Implementation:**
-```typescript
-// src/commands/auto-continuation.ts
-export const autoContinuationCommand = {
-  name: 'auto-continuation',
-  description: 'Monitor tmux session for usage limits and auto-continue',
-  options: {
-    session: { type: 'string', default: 'claude-with-hooks' },
-    discord: { type: 'boolean', default: true }
-  }
-}
-```
-
-**Key Components:**
-- **Tmux Monitor**: Capture pane content and detect limit patterns
-- **Time Parser**: Extract reset times from Claude messages (`resets 10pm`, etc.)
-- **Scheduler**: Intelligent polling with dynamic intervals (30s → 5s → exact timing)
-- **Discord Notifications**: Send status updates via Discord webhook/bot
-- **State Management**: Prevent spam, handle cooldowns, manage scheduling
-
-### **2. Remote Approval System**
-
-**Purpose**: Allow users to approve dangerous Claude operations via Discord instead of terminal access.
+**Purpose**: Single daemon that handles both auto-continuation and remote approvals via tmux monitoring.
 
 **Implementation:**
 ```typescript
-// src/commands/remote-approval.ts
-export const remoteApprovalCommand = {
-  name: 'remote-approval',
-  description: 'Handle Claude approval requests via Discord',
+// src/commands/monitor.ts
+export const monitorCommand = {
+  name: 'monitor',
+  description: 'Monitor tmux session for limits and approvals',
   options: {
     session: { type: 'string', default: 'claude' },
-    webhook: { type: 'string', required: true }
+    platform: { type: 'string', default: 'discord', choices: ['discord', 'slack'] }
   }
 }
 ```
 
 **Key Components:**
-- **Approval Detection**: Monitor tmux for approval dialogs
-- **Discord Integration**: Send approval requests with interactive buttons
-- **Response Handler**: Process Discord interactions and inject tmux keypresses
-- **Security**: Single-approval policy, automatic timeouts
+- **Simple Tmux Monitoring**: Basic pane capture and pattern detection
+- **Smart Polling**: 30s → 5s → exact timing (from working proof of concept)
+- **Discord/Slack Notifications**: Minimal webhook-based notifications
+- **Basic State Management**: Simple cooldown and spam prevention
 
----
+### **2. Early Window Scheduling**
 
-## 🤖 **Discord Integration Strategy**
+**Purpose**: Schedule a dummy command early (3-5am) to start the first 5-hour window earlier, optimizing daily usage windows.
 
-### **Notification Types:**
+**Implementation:**
 ```typescript
-type DiscordNotification = {
-  type: 'usage_limit' | 'continuation_success' | 'approval_request'
-  title: string
-  description: string
-  metadata?: {
-    resetTime?: string
-    toolName?: string
-    command?: string
+// src/commands/schedule.ts  
+export const scheduleCommand = {
+  name: 'schedule',
+  description: 'Schedule early window start (3am, 8am, 1pm, 6pm pattern)',
+  options: {
+    time: { type: 'string', default: '04:00' },
+    session: { type: 'string', default: 'claude' }
   }
 }
 ```
 
-### **Bot Commands:**
-- `/approve` - Approve pending operation
-- `/deny` - Deny pending operation  
-- `/status` - Show current daemon status
-- `/help` - Show available commands
-
-### **Interactive Elements:**
-- **Buttons**: Approve/Deny for approval requests
-- **Embeds**: Rich formatting for status updates
-- **Reactions**: Quick approval for simple operations
+**Key Components:**
+- **Simple Cron-like Scheduler**: Basic time-based execution
+- **Dummy Command Injection**: Send harmless command to start window
+- **Window Optimization**: 5am→10am→3pm→8pm daily pattern
 
 ---
 
-## 📦 **Package Configuration**
+## 🤖 **Simple Discord/Slack Integration**
 
-### **Environment Variables:**
+### **Minimal Notification Types:**
+```typescript
+type Notification = {
+  type: 'limit' | 'continued' | 'approval'
+  message: string
+  session?: string
+  resetTime?: string
+}
+```
+
+### **Discord Implementation:**
+- **Webhook-based**: Simple POST requests, no complex bot setup
+- **Interactive Buttons**: Basic Approve/Deny buttons for approvals
+- **Commands**: `/approve`, `/deny` - that's it
+
+### **Future Slack Support:**
+- **Similar webhook approach**: Keep it simple
+- **Slack buttons**: Native Slack interactive elements
+- **Same command patterns**: `/approve`, `/deny`
+
+### **No Complex Features:**
+- ❌ No rich embeds or fancy formatting
+- ❌ No status commands or help systems  
+- ❌ No multiple channels or user management
+- ✅ Just the essentials: notifications and approvals
+
+---
+
+## 📦 **Minimal Configuration**
+
+### **Environment Variables (.env):**
 ```bash
-# Discord Bot Configuration
-DISCORD_BOT_TOKEN=your_discord_bot_token
-DISCORD_CHANNEL_ID=your_channel_id
-DISCORD_WEBHOOK_URL=your_webhook_url  # Optional: for notifications only
+# Discord Webhook (simplest setup)
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+
+# OR Slack Webhook
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
 
 # TMux Configuration  
-TMUX_SESSION=claude-with-hooks        # Default session name
-POLLING_INTERVAL=30                   # Base polling interval in seconds
+TMUX_SESSION=claude                   # Default session name
 ```
 
-### **Configuration File (ccremote.config.json):**
-```json
-{
-  "discord": {
-    "botToken": "${DISCORD_BOT_TOKEN}",
-    "channelId": "${DISCORD_CHANNEL_ID}"
-  },
-  "tmux": {
-    "defaultSession": "claude-with-hooks",
-    "pollingInterval": 30
-  },
-  "features": {
-    "autoContinuation": true,
-    "remoteApproval": true
-  }
-}
-```
+### **No Complex Config Files:**
+- Environment variables only
+- Sensible defaults for everything
+- No JSON configs or schema validation
+- Keep it simple and get it working fast
 
 ---
 
-## 🚧 **Implementation Phases**
+## 🚧 **Simplified Implementation Plan**
 
-### **Phase 1: Core Infrastructure** ⏱️ 2-3 days
-- [ ] Clean ccusage-specific code from src/
-- [ ] Set up Discord client integration  
-- [ ] Implement basic tmux monitoring utilities
-- [ ] Create CLI command structure with Gunshi
-- [ ] Update package.json and branding
+### **Phase 1: Minimal Viable Product** ⏱️ 2-3 days
+- [ ] Create basic project structure (ccusage-inspired)
+- [ ] Port working auto-continuation daemon from proof of concept
+- [ ] Add simple Discord webhook notifications
+- [ ] Basic tmux monitoring (working patterns from PoC)
+- [ ] Single `ccremote monitor` command
 
-### **Phase 2: Auto-Continuation Feature** ⏱️ 2-3 days  
-- [ ] Port auto-continuation logic from features/
-- [ ] Implement time parsing and scheduling
-- [ ] Add Discord notification system
-- [ ] Test with real Claude sessions
-- [ ] Add configuration validation
+### **Phase 2: Remote Approvals** ⏱️ 2 days  
+- [ ] Port approval detection from proof of concept
+- [ ] Add Discord interactive buttons (simple webhook approach)
+- [ ] Basic approval workflow without complex state management
+- [ ] Test end-to-end approval flow
 
-### **Phase 3: Remote Approval Feature** ⏱️ 3-4 days
-- [ ] Port approval detection from features/
-- [ ] Implement Discord interactive buttons  
-- [ ] Add tmux keypress injection
-- [ ] Test approval workflow end-to-end
-- [ ] Add security and spam prevention
+### **Phase 3: Early Window Scheduling** ⏱️ 1 day
+- [ ] Simple scheduler for early morning dummy commands
+- [ ] Basic cron-like functionality for window optimization
+- [ ] Integration with existing monitoring
 
-### **Phase 4: Polish & Documentation** ⏱️ 1-2 days
-- [ ] Write comprehensive README.md
-- [ ] Add usage examples and setup guide
-- [ ] Create configuration schema documentation
-- [ ] Set up automated testing
-- [ ] Prepare for npm publishing
+### **Phase 4: Polish & Website** ⏱️ 2 days
+- [ ] Clean up code and add basic error handling
+- [ ] Create simple website (similar to CC Remote readme style)
+- [ ] Write setup documentation
+- [ ] Prepare npm package
 
-### **Phase 5: Domain & Distribution** ⏱️ 1 day
-- [ ] Set up ccremote.dev domain
-- [ ] Create landing page
-- [ ] Publish to npm registry
-- [ ] Create GitHub releases
+### **Phase 5: Distribution** ⏱️ 1 day
+- [ ] Publish to npm as `ccremote`
+- [ ] Deploy simple website to ccremote.dev
+- [ ] Create GitHub repository with releases
 
 ---
 
-## 📋 **Migration Checklist**
+## 📋 **Development Approach**
 
-### **Files to Remove:**
-- [ ] All pricing/cost calculation utilities
-- [ ] Usage analysis and reporting commands  
-- [ ] MCP server functionality
-- [ ] ccusage-specific configuration options
-- [ ] Telegram integration code
+### **Start Fresh, Learn from ccusage:**
+- [ ] New repository with clean ccusage-inspired structure
+- [ ] Modern TypeScript setup (tsdown, Gunshi CLI)
+- [ ] Copy working proof-of-concept logic directly
+- [ ] Focus on getting basic features working first
 
-### **Files to Keep & Modify:**
-- [ ] CLI infrastructure (Gunshi setup)
-- [ ] TypeScript configuration
-- [ ] Build and development scripts
-- [ ] Testing framework setup
-- [ ] ESLint and formatting configs
+### **Key Principles:**
+- **Simplicity over features**: Only what we actually need
+- **Working over perfect**: Get it functional, then polish
+- **Proven patterns**: Use what worked in the proof of concepts
+- **No premature optimization**: Basic polling is fine for now
 
-### **Files to Create:**
-- [ ] Discord client and webhook handlers
-- [ ] Tmux monitoring and command injection
-- [ ] Auto-continuation scheduling logic
-- [ ] Approval detection and response system
-- [ ] ccremote-specific configuration schema
+### **Avoid ccusage Pitfalls:**
+- ❌ Don't copy cost analysis or usage tracking
+- ❌ Don't build MCP servers or complex APIs
+- ❌ Don't over-engineer the configuration system
+- ✅ Keep the modern tooling and project structure
+- ✅ Use the CLI framework and TypeScript setup
 
 ---
 
@@ -257,23 +248,56 @@ POLLING_INTERVAL=30                   # Base polling interval in seconds
 
 ## 🌟 **Future Enhancements** (Post-MVP)
 
-### **Advanced Features:**
-- **Multi-session monitoring**: Support multiple tmux sessions
-- **Advanced scheduling**: Cron-like scheduling for continuation
-- **Workflow automation**: Chain approvals with conditions
-- **Integration plugins**: VS Code extension, shell hooks
-
 ### **Platform Expansion:**
-- **Alternative chat platforms**: Slack, Microsoft Teams support
-- **Mobile apps**: React Native app for approvals
-- **Web dashboard**: Browser-based monitoring interface
+- **Slack Support**: Same webhook approach as Discord
+- **Multiple Sessions**: Support monitoring multiple tmux sessions
+- **Better Scheduling**: More sophisticated early window scheduling
 
-### **Enterprise Features:**
-- **Team management**: Multi-user approval workflows  
-- **Audit logging**: Comprehensive operation logging
-- **Role-based access**: Different permission levels
-- **SSO integration**: Enterprise authentication
+### **Quality of Life:**
+- **Web Interface**: Simple status page (maybe)
+- **Better Error Handling**: More robust failure recovery
+- **Configuration UI**: Simple setup wizard (maybe)
+
+### **Advanced Features (Maybe):**
+- **Multi-user**: Team approval workflows
+- **Custom Commands**: User-defined automation
+- **Integration**: VS Code extension or shell integration
+
+### **Website & Documentation:**
+- **ccremote.dev**: Simple landing page with setup guide
+- **Interactive Examples**: Copy-paste setup instructions
+- **Usage Patterns**: Common workflow documentation
+- **Similar to**: CC Remote's readme style but as a website
 
 ---
 
-**🎉 End Goal**: A production-ready, minimalistic package that makes Claude Code usage seamless for remote developers, with automatic continuation and secure remote approvals via Discord.
+## 🌐 **Simple Website Plan (ccremote.dev)**
+
+### **Website Structure (Similar to CC Remote Style):**
+```
+ccremote.dev/
+├── index.html              # Landing page with hero, features, quick start
+├── setup.html              # Step-by-step setup guide  
+├── examples.html           # Usage examples and workflows
+├── css/
+│   └── style.css           # Simple, clean styling
+└── js/
+    └── main.js             # Basic interactivity (copy buttons, etc.)
+```
+
+### **Content Strategy:**
+- **Hero Section**: "Remote Claude Code Control Made Simple"
+- **Feature Highlights**: Auto-continuation, Remote approvals, Early scheduling
+- **Quick Start**: `npm install -g ccremote` → setup Discord → run monitor
+- **Setup Guide**: Discord webhook setup, environment variables, first run
+- **Examples**: Common workflows, troubleshooting, tips
+
+### **Design Approach:**
+- **Clean & minimal**: Similar to CC Remote readme but as a proper website
+- **Copy-paste friendly**: Easy to select commands and config examples
+- **Mobile responsive**: Works well on phones for reference
+- **No complexity**: Static HTML/CSS/JS, no frameworks needed
+
+---
+
+**🎉 End Goal**: A production-ready, minimalistic package that makes Claude Code usage seamless for remote developers, with automatic continuation and secure remote approvals via Discord/Slack.
