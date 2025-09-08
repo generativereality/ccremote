@@ -11,30 +11,32 @@
 
 Monitor your Claude Code sessions automatically, continue when usage limits reset, and get Discord notifications when attention is needed.
 
-## Installation
+## Quick Start
 
-### Quick Start (Recommended)
-
-```bash
-# Using bunx (recommended for speed)
-bunx ccremote@latest start
-
-# Using npx
-npx ccremote@latest start
-
-# Using bun
-bun dlx ccremote@latest start
-```
-
-### Local Installation (Optional)
+### 1. Install and Initialize
 
 ```bash
-# Install globally
+# Install globally (recommended)
 npm install -g ccremote
 
 # Or with bun
 bun install -g ccremote
+
+# Initialize configuration interactively
+ccremote init
 ```
+
+### 2. Start Monitoring
+
+```bash
+# Start with auto-attach to Claude Code
+ccremote start
+
+# Or with custom session name  
+ccremote start --name "my-project"
+```
+
+That's it! You'll be automatically attached to a Claude Code session with monitoring active.
 
 ## Quick Setup
 
