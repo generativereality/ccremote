@@ -12,10 +12,11 @@ export class SessionManager {
   }
 
   private async ensureConfigDir(): Promise<void> {
+    const configDir = dirname(this.sessionsFile)
     try {
-      await fs.access('.ccremote')
+      await fs.access(configDir)
     } catch {
-      await fs.mkdir('.ccremote', { recursive: true })
+      await fs.mkdir(configDir, { recursive: true })
     }
   }
 
@@ -115,4 +116,91 @@ export class SessionManager {
     const nextNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) + 1 : 1
     return `ccremote-${nextNumber}`
   }
+}
+
+if (import.meta.vitest != null) {
+  const { beforeEach, afterEach } = await import('vitest')
+  
+  describe('SessionManager', () => {
+    const testDir = '.ccremote-test'
+    
+    beforeEach(async () => {
+      // Clean up test directory
+      try {
+        await fs.rm(testDir, { recursive: true, force: true })
+      } catch {
+        // Ignore if doesn't exist
+      }
+    })
+
+    afterEach(async () => {
+      // Clean up test directory  
+      try {
+        await fs.rm(testDir, { recursive: true, force: true })
+      } catch {
+        // Ignore if doesn't exist
+      }
+    })
+
+    it('should create sessions with auto-generated IDs', async () => {
+      const sessionManager = new SessionManager()
+      sessionManager['sessionsFile'] = `${testDir}/sessions.json`
+      
+      await sessionManager.initialize()
+      
+      const session1 = await sessionManager.createSession()
+      expect(session1.id).toBe('ccremote-1')
+      expect(session1.name).toBe('session-1')
+      
+      const session2 = await sessionManager.createSession('my-project')
+      expect(session2.id).toBe('ccremote-2')
+      expect(session2.name).toBe('my-project')
+    })
+
+    it('should persist sessions across instances', async () => {
+      const sessionManager1 = new SessionManager()
+      sessionManager1['sessionsFile'] = `${testDir}/sessions.json`
+      
+      await sessionManager1.initialize()
+      await sessionManager1.createSession('test-persistence')
+
+      const sessionManager2 = new SessionManager()
+      sessionManager2['sessionsFile'] = `${testDir}/sessions.json`
+      await sessionManager2.initialize()
+
+      const sessions = await sessionManager2.listSessions()
+      const testSession = sessions.find(s => s.name === 'test-persistence')
+      expect(testSession).toBeDefined()
+      expect(testSession?.id).toBe('ccremote-1')
+    })
+
+    it('should handle CRUD operations correctly', async () => {
+      const sessionManager = new SessionManager()
+      sessionManager['sessionsFile'] = `${testDir}/sessions.json`
+      
+      await sessionManager.initialize()
+
+      // Create
+      const session = await sessionManager.createSession('crud-test')
+      expect(session.status).toBe('active')
+
+      // Read
+      const retrieved = await sessionManager.getSession(session.id)
+      expect(retrieved?.name).toBe('crud-test')
+
+      const retrievedByName = await sessionManager.getSessionByName('crud-test')
+      expect(retrievedByName?.id).toBe(session.id)
+
+      // Update
+      await sessionManager.updateSession(session.id, { status: 'waiting', channelId: '12345' })
+      const updated = await sessionManager.getSession(session.id)
+      expect(updated?.status).toBe('waiting')
+      expect(updated?.channelId).toBe('12345')
+
+      // Delete
+      await sessionManager.deleteSession(session.id)
+      const deleted = await sessionManager.getSession(session.id)
+      expect(deleted).toBe(null)
+    })
+  })
 }

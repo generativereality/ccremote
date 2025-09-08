@@ -1,72 +1,70 @@
-import { CLICommand } from '../lib/cli-framework.js'
+import { consola } from 'consola'
+import { define } from 'gunshi'
 import { SessionManager } from '../core/session.js'
 import { TmuxManager } from '../core/tmux.js'
 
-const command: CLICommand = {
-  description: 'Stop CCRemote session',
-  options: {
-    session: {
-      type: 'string',
-      description: 'Session ID or name to stop',
-      required: true
-    },
-    force: {
-      type: 'boolean',
-      description: 'Force stop even if tmux session is still active'
-    }
-  },
-  
-  async handler(options) {
-    try {
-      const sessionManager = new SessionManager()
-      const tmuxManager = new TmuxManager()
-      
-      await sessionManager.initialize()
-      
-      // Find session by ID or name
-      let session = await sessionManager.getSession(options.session)
-      if (!session) {
-        session = await sessionManager.getSessionByName(options.session)
-      }
-      
-      if (!session) {
-        console.error(`❌ Session not found: ${options.session}`)
-        console.error('Use "ccremote list" to see available sessions')
-        process.exit(1)
-      }
+export const stopCommand = define({
+	name: 'stop',
+	description: 'Stop CCRemote session',
+	args: {
+		session: {
+			type: 'positional',
+			description: 'Session ID or name to stop',
+			required: true,
+		},
+		force: {
+			type: 'boolean',
+			description: 'Force stop even if tmux session is still active',
+		},
+	},
+	async run({ args }) {
+	try {
+		const sessionManager = new SessionManager()
+		const tmuxManager = new TmuxManager()
 
-      console.log(`🛑 Stopping session: ${session.name} (${session.id})`)
+		await sessionManager.initialize()
 
-      // Check if tmux session is still running
-      const tmuxActive = await tmuxManager.sessionExists(session.tmuxSession)
-      
-      if (tmuxActive) {
-        if (!options.force) {
-          console.log('⚠️  Tmux session is still active')
-          console.log('   This will kill the tmux session and any running Claude Code instance')
-          console.log('   Use --force to proceed or stop the session manually first')
-          process.exit(1)
-        }
+		// Find session by ID or name
+		let session = await sessionManager.getSession(args.session)
+		if (!session) {
+			session = await sessionManager.getSessionByName(args.session)
+		}
 
-        console.log('🔪 Killing tmux session...')
-        await tmuxManager.killSession(session.tmuxSession)
-      }
+		if (!session) {
+			consola.error(`Session not found: ${args.session}`)
+			consola.error('Use "ccremote list" to see available sessions')
+			process.exit(1)
+		}
 
-      // Remove session from storage
-      await sessionManager.deleteSession(session.id)
+		consola.start(`Stopping session: ${session.name} (${session.id})`)
 
-      console.log('✅ Session stopped successfully!')
-      console.log('')
-      console.log('Session cleaned up:')
-      console.log(`  Name: ${session.name}`)
-      console.log(`  ID: ${session.id}`)
-      console.log(`  Tmux session: ${session.tmuxSession} ${tmuxActive ? '(killed)' : '(already dead)'}`)
+		// Check if tmux session is still running
+		const tmuxActive = await tmuxManager.sessionExists(session.tmuxSession)
 
-    } catch (error) {
-      console.error('❌ Failed to stop session:', error instanceof Error ? error.message : error)
-      process.exit(1)
-    }
-  }
-}
+		if (tmuxActive) {
+			if (!args.force) {
+				consola.warn('Tmux session is still active')
+				consola.warn('   This will kill the tmux session and any running Claude Code instance')
+				consola.warn('   Use --force to proceed or stop the session manually first')
+				process.exit(1)
+			}
 
-export default command
+			consola.info('Killing tmux session...')
+			await tmuxManager.killSession(session.tmuxSession)
+		}
+
+		// Remove session from storage
+		await sessionManager.deleteSession(session.id)
+
+		consola.success('Session stopped successfully!')
+		consola.info('')
+		consola.info('Session cleaned up:')
+		consola.info(`  Name: ${session.name}`)
+		consola.info(`  ID: ${session.id}`)
+		consola.info(`  Tmux session: ${session.tmuxSession} ${tmuxActive ? '(killed)' : '(already dead)'}`)
+	} catch (error) {
+		consola.error('Failed to stop session:', error instanceof Error ? error.message : error)
+		process.exit(1)
+	}
+	},
+})

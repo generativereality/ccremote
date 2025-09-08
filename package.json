@@ -3,33 +3,52 @@
   "version": "0.1.0",
   "description": "Remote Claude Code control with auto-continuation and Discord approvals",
   "type": "module",
-  "bin": {
-    "ccremote": "./dist/cli.js"
+  "exports": {
+    ".": "./dist/index.js"
   },
   "main": "./dist/index.js",
-  "scripts": {
-    "build": "tsdown src/cli.ts --format esm",
-    "dev": "tsx src/cli.ts",
-    "lint": "eslint src/",
-    "type-check": "tsc --noEmit",
-    "prepublishOnly": "npm run build",
-    "postpack": "rm -rf dist"
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": "./dist/index.js",
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20.19.4"
   },
-  "keywords": ["claude", "claude-code", "automation", "discord", "remote"],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "bun run ./src/index.ts",
+    "format": "bun run lint --fix",
+    "lint": "eslint --cache .",
+    "prepack": "bun run build",
+    "release": "bun lint && bun typecheck && vitest && bun run build && bumpp",
+    "start": "bun run ./src/index.ts",
+    "test": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "automation",
+    "discord",
+    "remote"
+  ],
   "author": "",
   "license": "MIT",
-  "dependencies": {
-    "discord.js": "^14.14.1",
-    "zod": "^3.22.4"
-  },
   "devDependencies": {
+    "@ryoppippi/eslint-config": "^0.3.7",
+    "@types/bun": "^1.2.20",
     "@types/node": "^20.11.16",
-    "eslint": "^8.56.0",
-    "tsdown": "^0.2.13",
+    "bumpp": "^10.2.3",
+    "consola": "^3.4.2",
+    "discord.js": "^14.14.1",
+    "eslint": "^9.33.0",
+    "gunshi": "^0.26.3",
+    "tsdown": "^0.14.1",
     "tsx": "^4.7.0",
-    "typescript": "^5.3.3"
-  },
-  "engines": {
-    "node": ">=18.0.0"
+    "typescript": "^5.3.3",
+    "vitest": "^3.2.4",
+    "zod": "^3.25.67"
   }
 }
