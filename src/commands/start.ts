@@ -1,6 +1,7 @@
 import { consola } from 'consola';
 import { define } from 'gunshi';
 import { DiscordBot } from '../core/discord.js';
+import { Monitor } from '../core/monitor.js';
 import { SessionManager } from '../core/session.js';
 import { TmuxManager } from '../core/tmux.js';
 
@@ -39,6 +40,7 @@ export const startCommand = define({
 			const sessionManager = new SessionManager();
 			const tmuxManager = new TmuxManager();
 			const discordBot = new DiscordBot();
+			const monitor = new Monitor(sessionManager, tmuxManager, discordBot);
 
 			await sessionManager.initialize();
 
@@ -89,10 +91,26 @@ export const startCommand = define({
 			consola.info('');
 			consola.info('Note: Keep this process running for monitoring to work!');
 
-			// For now, just keep the process alive
-			// In the future, this would start the monitoring daemon
+			// Set up monitoring event handlers
+			monitor.on('limit_detected', (event) => {
+				consola.warn(`🚫 Usage limit detected for ${event.sessionId}`);
+			});
+
+			monitor.on('continuation_ready', (event) => {
+				consola.info(`✅ Auto-continuing session ${event.sessionId}`);
+			});
+
+			monitor.on('error', (event) => {
+				consola.error(`❌ Monitor error for ${event.sessionId}:`, event.data?.error);
+			});
+
+			// Start monitoring
+			consola.info('Starting monitoring system...');
+			await monitor.startMonitoring(session.id);
+
 			process.on('SIGINT', () => {
 				consola.info('\nShutting down...');
+				void monitor.stopAll();
 				void discordBot.stop();
 				process.exit(0);
 			});
