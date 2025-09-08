@@ -106,84 +106,9 @@ ccremote start --name my-session --channel 123456789
 
 ---
 
-## ⏰ **Robust Scheduling System (Alternative to Polling)**
+## ⏰ **Scheduling System**
 
-### **Ideal Scheduler Requirements:**
-```typescript
-interface ScheduledTask {
-  id: string
-  sessionId: string
-  type: 'continuation' | 'early_window'
-  executeAt: Date        // Target execution time
-  executeBy: Date        // Latest acceptable execution time
-  executed: boolean      // Track if completed
-  payload?: any          // Task-specific data
-}
-```
-
-### **Scheduling Strategies:**
-
-### **Implementation Approach: In-Memory Timers**
-Since the ccremote daemon is designed to run continuously, we can use simple `setTimeout()` without persistence:
-
-```typescript
-// When limit detected: "resets 7pm"
-const resetTime = parseTime("7pm")
-scheduler.scheduleContination("session-1", resetTime)
-
-// Internally uses setTimeout() for precise timing
-// No files, databases, or complex state management needed
-```
-
-**Why This Works:**
-- Daemon runs continuously (like the proof of concept)
-- Simple `setTimeout()` is reliable for scheduled execution
-- If daemon restarts, it will detect limits again and reschedule
-- Much simpler than polling every 30 seconds
-
-### **Simple In-Memory Event Scheduler**
-```typescript
-class SimpleEventScheduler {
-  private timers = new Map<string, NodeJS.Timeout>()
-  
-  // Schedule continuation when limit detected
-  scheduleContination(sessionId: string, resetTime: Date) {
-    const taskId = `continuation-${sessionId}`
-    const delay = resetTime.getTime() - Date.now()
-    
-    // Clear any existing timer for this session
-    this.clearTimer(taskId)
-    
-    // Schedule execution
-    if (delay > 0) {
-      const timer = setTimeout(() => {
-        this.executeContinuation(sessionId)
-        this.timers.delete(taskId)
-      }, delay)
-      
-      this.timers.set(taskId, timer)
-    } else {
-      // Time already passed, execute immediately
-      this.executeContinuation(sessionId)
-    }
-  }
-  
-  clearTimer(taskId: string) {
-    const timer = this.timers.get(taskId)
-    if (timer) {
-      clearTimeout(timer)
-      this.timers.delete(taskId)
-    }
-  }
-}
-```
-
-### **Benefits over Polling:**
-- ✅ **CPU Efficient**: No constant monitoring, just event-driven timers
-- ✅ **Simple**: No persistence, files, or external dependencies
-- ✅ **Precise Timing**: Uses native `setTimeout()` for exact execution
-- ✅ **Long-running Friendly**: Designed for daemon that stays running
-- ✅ **Self-cleaning**: Timers auto-cleanup after execution
+Smart polling approach is used for reliability across laptop sleep/wake cycles. See **[docs/SCHEDULING.md](docs/SCHEDULING.md)** for detailed scheduling system design and implementation rationale.
 
 ### **2. Early Window Scheduling**
 
@@ -332,39 +257,17 @@ DISCORD_DEFAULT_CHANNEL=channel_id
 
 ---
 
-## 🚧 **Simplified Implementation Plan**
+## 🚧 **Implementation Plan**
 
-### **Phase 1: Session Management & Discord Bot** ⏱️ 3-4 days
-- [ ] Create basic project structure (ccusage-inspired)
-- [ ] Implement Discord bot with token-based connection
-- [ ] Session management system with local JSON storage
-- [ ] `ccremote start` command that replaces `claude`
-- [ ] Basic tmux session creation and monitoring
-- [ ] Channel-per-session Discord integration
+Detailed engineering implementation plan with specific steps, file structure, and timelines available in **[docs/ENGINEERING-PLAN.md](docs/ENGINEERING-PLAN.md)**.
 
-### **Phase 2: Event-Driven Monitoring** ⏱️ 2-3 days  
-- [ ] Simple in-memory event scheduler (replace polling)
-- [ ] Port limit detection patterns from proof of concept
-- [ ] Port approval detection from proof of concept
-- [ ] Discord message handling for approvals (`approve`/`deny`)
-- [ ] Test end-to-end session workflow with event scheduling
+### **Summary Timeline:**
+- **Phase 1**: Project setup, session management, Discord bot ⏱️ 3 days
+- **Phase 2**: Smart polling monitor, auto-continuation, approvals ⏱️ 3.5 days  
+- **Phase 3**: Integration, testing, edge cases ⏱️ 2 days
+- **Phase 4**: Build, package, deployment preparation ⏱️ 0.5 days
 
-### **Phase 3: Session Management Commands** ⏱️ 1-2 days
-- [ ] `ccremote list` - show active sessions
-- [ ] `ccremote stop` - stop specific session
-- [ ] `ccremote status` - detailed session status
-- [ ] Early window scheduling integration
-
-### **Phase 4: Polish & Website** ⏱️ 2 days
-- [ ] Clean up code and add basic error handling
-- [ ] Create simple website (similar to CC Remote readme style)
-- [ ] Write setup documentation
-- [ ] Prepare npm package
-
-### **Phase 5: Distribution** ⏱️ 1 day
-- [ ] Publish to npm as `ccremote`
-- [ ] Deploy simple website to ccremote.dev
-- [ ] Create GitHub repository with releases
+**Total Estimated Time: 8-10 days**
 
 ---
 
