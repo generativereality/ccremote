@@ -9,7 +9,7 @@ export class TmuxManager {
 			// Create new tmux session with mouse mode enabled
 			const createCommand = `tmux new-session -d -s "${sessionName}" -c "${process.cwd()}" \\; set -g mouse on`;
 			await execAsync(createCommand);
-			
+
 			// Start Claude in the session
 			const startClaudeCommand = `tmux send-keys -t "${sessionName}" "claude" Enter`;
 			await execAsync(startClaudeCommand);

@@ -2,7 +2,7 @@ import { consola } from 'consola';
 import { define } from 'gunshi';
 import { loadConfig, validateConfig } from '../core/config.js';
 import { DiscordBot } from '../core/discord.js';
-import { setSilentMode, setSessionLogFile } from '../core/logger.js';
+import { setSessionLogFile, setSilentMode } from '../core/logger.js';
 import { Monitor } from '../core/monitor.js';
 import { SessionManager } from '../core/session.js';
 import { TmuxManager } from '../core/tmux.js';
@@ -107,18 +107,19 @@ export const startCommand = define({
 			// Create log file for monitoring output
 			const fs = await import('node:fs/promises');
 			await fs.writeFile(logFile, `ccremote session ${session.id} started at ${new Date().toISOString()}\n`);
-			
+
 			// Configure session-specific file logging
 			setSessionLogFile(logFile);
 
 			// Set up monitoring event handlers (write to log instead of console after attach)
 			let attachedToTmux = false;
-			
+
 			monitor.on('limit_detected', (event) => {
 				const message = `🚫 Usage limit detected for ${event.sessionId}`;
 				if (attachedToTmux) {
 					void fs.appendFile(logFile, `${new Date().toISOString()} ${message}\n`);
-				} else {
+				}
+				else {
 					consola.warn(message);
 				}
 			});
@@ -127,7 +128,8 @@ export const startCommand = define({
 				const message = `✅ Auto-continuing session ${event.sessionId}`;
 				if (attachedToTmux) {
 					void fs.appendFile(logFile, `${new Date().toISOString()} ${message}\n`);
-				} else {
+				}
+				else {
 					consola.info(message);
 				}
 			});
@@ -136,7 +138,8 @@ export const startCommand = define({
 				const message = `❌ Monitor error for ${event.sessionId}: ${event.data?.error}`;
 				if (attachedToTmux) {
 					void fs.appendFile(logFile, `${new Date().toISOString()} ${message}\n`);
-				} else {
+				}
+				else {
 					consola.error(message);
 				}
 			});
@@ -156,29 +159,29 @@ export const startCommand = define({
 			consola.info('🔄 Attaching to Claude Code session in 3 seconds...');
 			consola.info('   (Press Ctrl+B then D to detach and return to monitoring)');
 			consola.info(`   Monitoring logs: ${logFile}`);
-			
+
 			await new Promise(resolve => setTimeout(resolve, 3000));
-			
+
 			// Set flag to redirect output to logs
 			attachedToTmux = true;
-			
+
 			// Enable silent mode to redirect all daemon logging to file
 			setSilentMode(true);
-			
+
 			// Attach to the tmux session
 			const { spawn } = await import('node:child_process');
-			
+
 			// Use spawn to attach interactively
 			const attachProcess = spawn('tmux', ['attach-session', '-t', session.tmuxSession], {
 				stdio: 'inherit',
 			});
-			
+
 			attachProcess.on('exit', (code) => {
 				attachedToTmux = false; // Resume console output when detached
-				
+
 				// Disable silent mode to resume console logging
 				setSilentMode(false);
-				
+
 				if (code === 0) {
 					consola.info('');
 					consola.info('👋 Detached from tmux session');
@@ -188,10 +191,11 @@ export const startCommand = define({
 					consola.info(`   View logs: tail -f ${logFile}`);
 					consola.info('');
 					consola.info('🔄 Monitoring continues...');
-					
+
 					// Keep process alive for monitoring
 					return new Promise<void>(() => {}); // Wait forever
-				} else {
+				}
+				else {
 					consola.error('Failed to attach to tmux session');
 					process.exit(1);
 				}

@@ -9,21 +9,20 @@
  */
 
 import type { ConsolaInstance } from 'consola';
+import { promises as fs, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import process from 'node:process';
 import { consola } from 'consola';
-import { readFileSync } from 'node:fs';
-import { promises as fs } from 'node:fs';
-import { join } from 'node:path';
 
 // Read package name from package.json
 const packagePath = join(import.meta.dirname, '../../package.json');
-const packageJson = JSON.parse(readFileSync(packagePath, 'utf-8'));
-const packageName = packageJson.name || 'ccremote';
+const packageJson = JSON.parse(readFileSync(packagePath, 'utf-8')) as { name?: string };
+const packageName: string = packageJson.name || 'ccremote';
 
 /**
  * Application logger instance with package name tag
  */
-export const logger: ConsolaInstance = consola.withTag(packageName);
+export const logger: ConsolaInstance = consola.withTag(packageName as string);
 
 // Apply LOG_LEVEL environment variable if set
 if (process.env.LOG_LEVEL != null) {
@@ -86,7 +85,7 @@ export const sessionLogger = {
 
 if (import.meta.vitest) {
 	const { describe, it, expect, beforeEach, afterEach } = await import('vitest');
-	
+
 	describe('logger', () => {
 		beforeEach(() => {
 			// Clear any existing session log file
@@ -100,38 +99,40 @@ if (import.meta.vitest) {
 
 		it('should support silent mode', () => {
 			const originalLevel = logger.level;
-			
+
 			// Test enabling silent mode
 			setSilentMode(true);
 			expect(logger.level).toBe(0);
-			
+
 			// Test disabling silent mode
 			setSilentMode(false);
 			expect(logger.level).toBe(3);
-			
+
 			// Restore original level
 			logger.level = originalLevel;
 		});
 
 		it('should support session log file configuration', async () => {
 			const testLogFile = '/tmp/test-session.log';
-			
+
 			// Configure session log file
 			setSessionLogFile(testLogFile);
-			
+
 			// Log a test message
 			await sessionLogger.info('Test message');
-			
+
 			// Check if file exists and contains the message
 			try {
 				const content = await fs.readFile(testLogFile, 'utf-8');
 				expect(content).toContain('Test message');
 				expect(content).toContain('[INFO]');
-			} finally {
+			}
+			finally {
 				// Clean up test file
 				try {
 					await fs.unlink(testLogFile);
-				} catch {
+				}
+				catch {
 					// Ignore cleanup errors
 				}
 			}

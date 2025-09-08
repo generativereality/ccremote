@@ -30,7 +30,6 @@ export class Monitor extends EventEmitter {
 		retryCount: number;
 	}>();
 
-
 	// Pattern matching for Claude Code messages
 	private readonly patterns = {
 		// Usage limit patterns - enhanced from proof-of-concept
@@ -284,7 +283,7 @@ export class Monitor extends EventEmitter {
 
 		for (const line of lines) {
 			// Clean line of box drawing characters and extra whitespace
-			const cleanLine = line.replace(/[│┃┆┊╎╏║╭╮╯╰┌┐└┘├┤┬┴┼─━┄┅┈┉═║╔╗╚╝╠╣╦╩╬]/g, '').replace(/\s+/g, ' ').trim();
+			const cleanLine = line.replace(/[│┃┆┊╎╏║╭╮╯╰┌┐└┘├┤┬┴┼─━┄┅┈┉═╔╗╚╝╠╣╦╩╬]/g, '').replace(/\s+/g, ' ').trim();
 
 			// Extract the specific question
 			if (this.patterns.approvalDialog.question.test(cleanLine)) {
@@ -295,11 +294,13 @@ export class Monitor extends EventEmitter {
 					tool = 'Edit';
 					const filename = cleanLine.match(/([^/\\\s]+\.tsx?)\?/)?.[1] || 'file';
 					action = `Edit ${filename}`;
-				} else if (cleanLine.includes('create') && cleanLine.includes('.')) {
+				}
+				else if (cleanLine.includes('create') && cleanLine.includes('.')) {
 					tool = 'Write';
 					const filename = cleanLine.match(/create ([^?\s]+)/)?.[1] || 'file';
 					action = `Create ${filename}`;
-				} else if (cleanLine.includes('proceed')) {
+				}
+				else if (cleanLine.includes('proceed')) {
 					// Check if this is a bash command by looking at context
 					if (output.includes('Bash command')) {
 						tool = 'Bash';
@@ -307,7 +308,7 @@ export class Monitor extends EventEmitter {
 						const lines = output.split('\n');
 						let command = 'unknown command';
 						for (const line of lines) {
-							const cleanLine = line.replace(/[│┃┆┊╎╏║╭╮╯╰┌┐└┘├┤┬┴┼─━┄┅┈┉═║╔╗╚╝╠╣╦╩╬]/g, '').trim();
+							const cleanLine = line.replace(/[│┃┆┊╎╏║╭╮╯╰┌┐└┘├┤┬┴┼─━┄┅┈┉═╔╗╚╝╠╣╦╩╬]/g, '').trim();
 							// Look for lines that start with commands (not empty, not descriptions)
 							if (cleanLine && !cleanLine.includes('Bash command') && !cleanLine.includes('Do you want') && !cleanLine.includes('Yes') && !cleanLine.includes('No') && cleanLine.length > 3) {
 								command = cleanLine;
@@ -315,7 +316,8 @@ export class Monitor extends EventEmitter {
 							}
 						}
 						action = `Execute: ${command}`;
-					} else {
+					}
+					else {
 						tool = 'Tool';
 						action = 'Proceed with operation';
 					}
@@ -561,14 +563,14 @@ if (import.meta.vitest) {
 │   3. No, and tell Claude what to do differently (esc)                                                                                            │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯`;
 
-		const tmuxCreateFileFixture = `│ Do you want to create debug-stop.js?                                                                                                          │
+			const tmuxCreateFileFixture = `│ Do you want to create debug-stop.js?                                                                                                          │
 │ ❯ 1. Yes                                                                                                                                      │
 │   2. Yes, allow all edits during this session (shift+tab)                                                                                     │
 │   3. No, and tell Claude what to do differently (esc)                                                                                         │
 │                                                                                                                                               │
 ╰───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯`;
 
-		const noApprovalFixture = `Regular tmux output without approval dialog
+			const noApprovalFixture = `Regular tmux output without approval dialog
 Some command output
 More text here`;
 
