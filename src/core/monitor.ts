@@ -40,7 +40,7 @@ export class Monitor extends EventEmitter {
 		// Claude Code approval dialog patterns - from working proof-of-concept
 		approvalDialog: {
 			// Must have all three components for valid approval dialog
-			question: /Do you want to (?:make this edit to|proceed)/i,
+			question: /Do you want to (?:make this edit to|create|proceed)/i,
 			numberedOptions: /\b\d+\.\s+Yes/,
 			currentSelection: /❯/,
 		},
@@ -295,6 +295,10 @@ export class Monitor extends EventEmitter {
 					tool = 'Edit';
 					const filename = cleanLine.match(/([^/\\\s]+\.tsx?)\?/)?.[1] || 'file';
 					action = `Edit ${filename}`;
+				} else if (cleanLine.includes('create') && cleanLine.includes('.')) {
+					tool = 'Write';
+					const filename = cleanLine.match(/create ([^?\s]+)/)?.[1] || 'file';
+					action = `Create ${filename}`;
 				} else if (cleanLine.includes('proceed')) {
 					// Check if this is a bash command by looking at context
 					if (output.includes('Bash command')) {
@@ -557,6 +561,13 @@ if (import.meta.vitest) {
 │   3. No, and tell Claude what to do differently (esc)                                                                                            │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯`;
 
+		const tmuxCreateFileFixture = `│ Do you want to create debug-stop.js?                                                                                                          │
+│ ❯ 1. Yes                                                                                                                                      │
+│   2. Yes, allow all edits during this session (shift+tab)                                                                                     │
+│   3. No, and tell Claude what to do differently (esc)                                                                                         │
+│                                                                                                                                               │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯`;
+
 		const noApprovalFixture = `Regular tmux output without approval dialog
 Some command output
 More text here`;
@@ -573,6 +584,11 @@ More text here`;
 
 			it('should detect bash command approval dialog', () => {
 				const result = (monitor as any).detectApprovalDialog(tmuxBashFixture);
+				expect(result).toBe(true);
+			});
+
+			it('should detect file creation approval dialog', () => {
+				const result = (monitor as any).detectApprovalDialog(tmuxCreateFileFixture);
 				expect(result).toBe(true);
 			});
 
@@ -600,6 +616,13 @@ More text here`;
 				expect(result.tool).toBe('Bash');
 				expect(result.action).toBe('Execute: vitest run src/core/monitor.ts');
 				expect(result.question).toBe('Do you want to proceed?');
+			});
+
+			it('should extract approval info from file creation dialog', () => {
+				const result = (monitor as any).extractApprovalInfo(tmuxCreateFileFixture);
+				expect(result.tool).toBe('Write');
+				expect(result.action).toBe('Create debug-stop.js');
+				expect(result.question).toBe('Do you want to create debug-stop.js?');
 			});
 		});
 	});
