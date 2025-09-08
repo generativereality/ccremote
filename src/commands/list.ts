@@ -50,7 +50,7 @@ export const listCommand = define({
 					consola.warn(`   ${session.name} (${session.id})`);
 				}
 				consola.info('');
-				consola.info('Clean up with: ccremote stop <session-id>');
+				consola.info('Clean up with: ccremote stop --session <session-id>');
 			}
 		}
 		catch (error) {

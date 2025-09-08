@@ -8,7 +8,7 @@ export const statusCommand = define({
 	description: 'Show detailed status of ccremote session',
 	args: {
 		session: {
-			type: 'positional',
+			type: 'string',
 			description: 'Session ID or name to show status for',
 			required: true,
 		},
@@ -81,10 +81,10 @@ export const statusCommand = define({
 			consola.info('Available Commands:');
 			if (tmuxActive) {
 				consola.info(`  Attach to session: tmux attach -t ${session.tmuxSession}`);
-				consola.info(`  Stop session: ccremote stop ${session.id}`);
+				consola.info(`  Stop session: ccremote stop --session ${session.id}`);
 			}
 			else {
-				consola.info(`  Clean up session: ccremote stop ${session.id}`);
+				consola.info(`  Clean up session: ccremote stop --session ${session.id}`);
 				consola.info('  (Tmux session is not running)');
 			}
 		}

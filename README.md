@@ -79,9 +79,9 @@ ccremote start --channel "channel_id"    # Use specific Discord channel
 
 # Manage sessions
 ccremote list                            # List all sessions
-ccremote status ccremote-1               # Show session details
-ccremote stop ccremote-1                 # Stop session
-ccremote stop ccremote-1 --force         # Force stop even if active
+ccremote status --session ccremote-1     # Show session details
+ccremote stop --session ccremote-1       # Stop session
+ccremote stop --session ccremote-1 --force  # Force stop even if active
 
 # Manual tmux access (if needed)
 tmux attach -t ccremote-1                # Attach to existing session

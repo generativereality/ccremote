@@ -8,7 +8,7 @@ export const stopCommand = define({
 	description: 'Stop ccremote session',
 	args: {
 		session: {
-			type: 'positional',
+			type: 'string',
 			description: 'Session ID or name to stop',
 			required: true,
 		},

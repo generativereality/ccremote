@@ -99,7 +99,7 @@ export const startCommand = define({
 			consola.info('💡 Usage:');
 			consola.info('  • Use Claude Code normally - ccremote will monitor for limits and approvals');
 			consola.info('  • Check Discord for notifications and approval requests');
-			consola.info(`  • Stop session when done: ccremote stop ${session.id}`);
+			consola.info(`  • Stop session when done: ccremote stop --session ${session.id}`);
 			consola.info('');
 			consola.info('Note: Monitoring continues in the background!');
 
@@ -180,7 +180,7 @@ export const startCommand = define({
 					consola.info('👋 Detached from tmux session');
 					consola.info(`   Session ${session.id} is still running and being monitored`);
 					consola.info(`   Reattach anytime with: tmux attach -t ${session.tmuxSession}`);
-					consola.info(`   Stop session with: ccremote stop ${session.id}`);
+					consola.info(`   Stop session with: ccremote stop --session ${session.id}`);
 					consola.info(`   View logs: tail -f ${logFile}`);
 					consola.info('');
 					consola.info('🔄 Monitoring continues...');
