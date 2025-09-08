@@ -5,7 +5,7 @@ import { TmuxManager } from '../core/tmux.js';
 
 export const listCommand = define({
 	name: 'list',
-	description: 'List all CCRemote sessions',
+	description: 'List all ccremote sessions',
 	async run() {
 		try {
 			const sessionManager = new SessionManager();
@@ -22,7 +22,7 @@ export const listCommand = define({
 				return;
 			}
 
-			consola.info('CCRemote Sessions:');
+			consola.info('ccremote Sessions:');
 			consola.info('');
 
 			for (const session of sessions) {

@@ -5,7 +5,7 @@ import { TmuxManager } from '../core/tmux.js';
 
 export const stopCommand = define({
 	name: 'stop',
-	description: 'Stop CCRemote session',
+	description: 'Stop ccremote session',
 	args: {
 		session: {
 			type: 'positional',

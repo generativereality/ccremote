@@ -1,8 +1,8 @@
-# 🚀 CCRemote Development Plan
+# 🚀 ccremote Development Plan
 
 ## 📋 **Project Overview**
 
-**CCRemote** is a minimalistic Claude Code remote control package that provides automated continuation and remote approval features via Discord/Slack integration. Built on modern, simple architecture inspired by ccusage, it focuses exclusively on tmux monitoring-based features without dependency on Claude Code hooks or complex integrations.
+**ccremote** is a minimalistic Claude Code remote control package that provides automated continuation and remote approval features via Discord/Slack integration. Built on modern, simple architecture inspired by ccusage, it focuses exclusively on tmux monitoring-based features without dependency on Claude Code hooks or complex integrations.
 
 ---
 

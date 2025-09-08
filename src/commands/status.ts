@@ -5,7 +5,7 @@ import { TmuxManager } from '../core/tmux.js';
 
 export const statusCommand = define({
 	name: 'status',
-	description: 'Show detailed status of CCRemote session',
+	description: 'Show detailed status of ccremote session',
 	args: {
 		session: {
 			type: 'positional',

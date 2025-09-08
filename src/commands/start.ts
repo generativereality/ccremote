@@ -20,7 +20,7 @@ export const startCommand = define({
 	},
 	async run(ctx) {
 		const { name, channel } = ctx.values;
-		consola.start('Starting CCRemote session...');
+		consola.start('Starting ccremote session...');
 
 		// Check environment variables
 		const discordToken = process.env.DISCORD_BOT_TOKEN;
@@ -85,7 +85,7 @@ export const startCommand = define({
 			consola.info('');
 			consola.info('Next steps:');
 			consola.info(`  1. Attach to tmux session: tmux attach -t ${session.tmuxSession}`);
-			consola.info('  2. Use Claude Code normally - CCRemote will monitor for limits and approvals');
+			consola.info('  2. Use Claude Code normally - ccremote will monitor for limits and approvals');
 			consola.info('  3. Check Discord for notifications and approval requests');
 			consola.info(`  4. Stop session when done: ccremote stop ${session.id}`);
 			consola.info('');

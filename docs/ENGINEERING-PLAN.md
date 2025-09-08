@@ -1,4 +1,4 @@
-# 🔧 **CCRemote Engineering Implementation Plan**
+# 🔧 **ccremote Engineering Implementation Plan**
 
 ## **Project Structure Setup**
 

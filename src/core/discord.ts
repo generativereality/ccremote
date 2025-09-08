@@ -153,7 +153,7 @@ export class DiscordBot {
 			this.channelSessionMap.set(dmChannel.id, sessionId);
 
 			// Send initial message
-			await dmChannel.send(`🚀 **CCRemote Session Started**\nSession: ${sessionName} (${sessionId})\n\nI'll send notifications for this session here.`);
+			await dmChannel.send(`🚀 **ccremote Session Started**\nSession: ${sessionName} (${sessionId})\n\nI'll send notifications for this session here.`);
 
 			return dmChannel.id;
 		}
