@@ -53,7 +53,7 @@ medium.com
 Discussions of scheduling around the 5-hour window on Reddit
 reddit.com
 docs.anthropic.com
- (various strategies to maximize uninterrupted usage without manual intervention).
+(various strategies to maximize uninterrupted usage without manual intervention).
 Citations
 
 How Claude Code Hook with Slack Helps Me Build My Dreams — While Raising a Kid and Working Full-Time | by Zero Code Startup | Jul, 2025 | Medium

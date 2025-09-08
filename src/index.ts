@@ -9,8 +9,6 @@
  * @module index
  */
 
-/* eslint-disable antfu/no-top-level-await */
+import { run } from './commands/index.js';
 
-import { run } from './commands/index.js'
-
-await run()
+await run();

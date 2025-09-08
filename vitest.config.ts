@@ -4,7 +4,10 @@ export default defineConfig({
 	test: {
 		globals: true,
 		environment: 'node',
-		include: ['src/**/*.test.ts', 'src/**/*.ts'],
+		includeSource: ['src/**/*.ts'],
 		exclude: ['node_modules', 'dist', 'related-repos'],
+	},
+	define: {
+		'import.meta.vitest': 'undefined',
 	},
 })

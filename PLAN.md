@@ -9,17 +9,20 @@
 ## 🏗️ **Current State Analysis**
 
 ### **✅ What We Have:**
+
 - **Prototyped Features**: Auto-continuation and remote approvals working with tmux monitoring
 - **Clean Structure**: ccusage-based architecture with TypeScript, Gunshi CLI, modern build tools
 - **Working Demos**: Features implemented in `features/` directory
 
 ### **❌ What Claude-Code-Remote Analysis Revealed:**
+
 - **Too bloated**: Unnecessary integrations (email, Line, complex hooks)
 - **Hook dependency issues**: Cumbersome to configure, unreliable
 - **Over-engineered**: Multiple notification channels, complex state management
 - **Not our use case**: Features we don't need (email workflows, complex scheduling)
 
 ### **✅ Our Simplified Approach:**
+
 - **Discord/Slack first**: Start with Discord, add Slack support later
 - **Tmux-only monitoring**: No hook dependencies, just tmux pane monitoring
 - **Minimal features**: Auto-continuation, remote approvals, early window scheduling
@@ -31,6 +34,7 @@
 ## 🎯 **Target Architecture**
 
 ### **Updated Package Structure:**
+
 ```
 ccremote/
 ├── src/
@@ -58,6 +62,7 @@ ccremote/
 ```
 
 ### **Tech Stack (Inherited from ccusage):**
+
 - **TypeScript**: Modern type-safe development
 - **Gunshi**: CLI framework for command handling
 - **Bun**: Fast package manager and runtime
@@ -74,19 +79,21 @@ ccremote/
 **Purpose**: Replace `claude` command with `ccremote` that sets up monitored tmux sessions with Discord integration.
 
 **Implementation:**
+
 ```typescript
 // src/commands/start.ts
 export const startCommand = {
-  name: 'start',
-  description: 'Start monitored Claude Code session',
-  options: {
-    name: { type: 'string', description: 'Session name (auto-generated if not provided)' },
-    channel: { type: 'string', description: 'Discord channel ID (optional)' }
-  }
-}
+	name: 'start',
+	description: 'Start monitored Claude Code session',
+	options: {
+		name: { type: 'string', description: 'Session name (auto-generated if not provided)' },
+		channel: { type: 'string', description: 'Discord channel ID (optional)' }
+	}
+};
 ```
 
 **Usage Examples:**
+
 ```bash
 # Replace: claude code
 ccremote start
@@ -99,6 +106,7 @@ ccremote start --name my-session --channel 123456789
 ```
 
 **Key Components:**
+
 - **Simple Tmux Monitoring**: Basic pane capture and pattern detection
 - **Event-based Scheduling**: "Execute once at X, latest by Y" - handles sleep/wake robustly
 - **Discord Bot Integration**: Real-time notifications and interactive responses
@@ -115,19 +123,21 @@ Smart polling approach is used for reliability across laptop sleep/wake cycles. 
 **Purpose**: Schedule a dummy command early (3-5am) to start the first 5-hour window earlier, optimizing daily usage windows.
 
 **Implementation:**
+
 ```typescript
-// src/commands/schedule.ts  
+// src/commands/schedule.ts
 export const scheduleCommand = {
-  name: 'schedule',
-  description: 'Schedule early window start (3am, 8am, 1pm, 6pm pattern)',
-  options: {
-    time: { type: 'string', default: '04:00' },
-    session: { type: 'string', default: 'claude' }
-  }
-}
+	name: 'schedule',
+	description: 'Schedule early window start (3am, 8am, 1pm, 6pm pattern)',
+	options: {
+		time: { type: 'string', default: '04:00' },
+		session: { type: 'string', default: 'claude' }
+	}
+};
 ```
 
 **Key Components:**
+
 - **Simple Cron-like Scheduler**: Basic time-based execution
 - **Dummy Command Injection**: Send harmless command to start window
 - **Window Optimization**: 5am→10am→3pm→8pm daily pattern
@@ -137,39 +147,43 @@ export const scheduleCommand = {
 ## 🤖 **Discord Bot Integration**
 
 ### **Bot Architecture:**
+
 ```typescript
 type SessionNotification = {
-  sessionId: string
-  sessionName: string
-  channelId: string
-  type: 'limit' | 'continued' | 'approval'
-  message: string
-  metadata?: {
-    resetTime?: string
-    command?: string
-  }
-}
+	sessionId: string;
+	sessionName: string;
+	channelId: string;
+	type: 'limit' | 'continued' | 'approval';
+	message: string;
+	metadata?: {
+		resetTime?: string;
+		command?: string;
+	};
+};
 ```
 
 ### **Discord Bot Implementation:**
+
 - **Token-based**: Discord bot connects via `DISCORD_BOT_TOKEN`
 - **Persistent Connection**: Listens for messages, can respond immediately
 - **Channel per Session**: Each ccremote session gets its own Discord channel
 - **Interactive Commands**: `approve`, `deny`, `status` within each channel
 
 ### **Session Management:**
+
 ```typescript
 type SessionState = {
-  id: string
-  name: string
-  tmuxSession: string
-  channelId: string
-  status: 'active' | 'waiting' | 'error'
-  lastActivity: string
-}
+	id: string;
+	name: string;
+	tmuxSession: string;
+	channelId: string;
+	status: 'active' | 'waiting' | 'error';
+	lastActivity: string;
+};
 ```
 
 ### **Security Model:**
+
 - **Private Channels Only**: Bot only works in private channels/DMs
 - **Authorized Users**: Only bot owner and invited users can control sessions
 - **Channel Isolation**: Each session responds only to its designated channel
@@ -180,22 +194,25 @@ type SessionState = {
 ## 🔒 **Security & Access Control**
 
 ### **Bot Security Strategy:**
+
 ```typescript
 type AuthConfig = {
-  ownerId: string                    // Primary bot owner (from DISCORD_OWNER_ID)
-  authorizedUsers: string[]          // Additional authorized user IDs
-  authorizedChannels: string[]       // Allowed channel IDs
-  requirePrivateChannel: boolean     // Only work in private channels
-}
+	ownerId: string; // Primary bot owner (from DISCORD_OWNER_ID)
+	authorizedUsers: string[]; // Additional authorized user IDs
+	authorizedChannels: string[]; // Allowed channel IDs
+	requirePrivateChannel: boolean; // Only work in private channels
+};
 ```
 
 ### **Access Control Levels:**
+
 1. **Bot Owner**: Full access, can authorize others
 2. **Authorized Users**: Can create/control sessions in allowed channels
 3. **Channel Members**: Can view session status (read-only)
 4. **Everyone Else**: No access
 
 ### **Security Implementation:**
+
 - **User ID Validation**: Check `message.author.id` against authorized list
 - **Channel Type Check**: Reject commands from public channels (optional setting)
 - **Session Ownership**: Users can only control sessions they created
@@ -203,6 +220,7 @@ type AuthConfig = {
 - **Audit Logging**: Log all commands with user ID and timestamp
 
 ### **Setup Security:**
+
 ```bash
 # Required: Bot owner Discord user ID
 DISCORD_OWNER_ID=your_discord_user_id
@@ -215,6 +233,7 @@ REQUIRE_PRIVATE_CHANNELS=true
 ```
 
 ### **Team Collaboration:**
+
 - **Invite Colleagues**: Add their Discord user IDs to authorized list
 - **Shared Channels**: Create private channels for team projects
 - **Session Sharing**: Team members can view status but not control others' sessions
@@ -225,6 +244,7 @@ REQUIRE_PRIVATE_CHANNELS=true
 ## 📦 **Minimal Configuration**
 
 ### **Environment Variables (.env):**
+
 ```bash
 # Discord Bot Configuration
 DISCORD_BOT_TOKEN=your_discord_bot_token
@@ -235,21 +255,23 @@ DISCORD_DEFAULT_CHANNEL=channel_id
 ```
 
 ### **Session Storage (.ccremote/sessions.json):**
+
 ```json
 {
-  "ccremote-1": {
-    "id": "ccremote-1",
-    "name": "my-session",
-    "tmuxSession": "ccremote-1",
-    "channelId": "123456789",
-    "status": "active",
-    "created": "2025-01-15T10:30:00Z",
-    "lastActivity": "2025-01-15T11:45:00Z"
-  }
+	"ccremote-1": {
+		"id": "ccremote-1",
+		"name": "my-session",
+		"tmuxSession": "ccremote-1",
+		"channelId": "123456789",
+		"status": "active",
+		"created": "2025-01-15T10:30:00Z",
+		"lastActivity": "2025-01-15T11:45:00Z"
+	}
 }
 ```
 
 ### **Simple Configuration:**
+
 - Minimal environment setup
 - Local JSON file for session tracking
 - Auto-generated session names (ccremote-1, ccremote-2, etc.)
@@ -262,8 +284,9 @@ DISCORD_DEFAULT_CHANNEL=channel_id
 Detailed engineering implementation plan with specific steps, file structure, and timelines available in **[docs/ENGINEERING-PLAN.md](docs/ENGINEERING-PLAN.md)**.
 
 ### **Summary Timeline:**
+
 - **Phase 1**: Project setup, session management, Discord bot ⏱️ 3 days
-- **Phase 2**: Smart polling monitor, auto-continuation, approvals ⏱️ 3.5 days  
+- **Phase 2**: Smart polling monitor, auto-continuation, approvals ⏱️ 3.5 days
 - **Phase 3**: Integration, testing, edge cases ⏱️ 2 days
 - **Phase 4**: Build, package, deployment preparation ⏱️ 0.5 days
 
@@ -274,18 +297,21 @@ Detailed engineering implementation plan with specific steps, file structure, an
 ## 📋 **Development Approach**
 
 ### **Start Fresh, Learn from ccusage:**
+
 - [ ] New repository with clean ccusage-inspired structure
 - [ ] Modern TypeScript setup (tsdown, Gunshi CLI)
 - [ ] Copy working proof-of-concept logic directly
 - [ ] Focus on getting basic features working first
 
 ### **Key Principles:**
+
 - **Simplicity over features**: Only what we actually need
 - **Working over perfect**: Get it functional, then polish
 - **Proven patterns**: Use what worked in the proof of concepts
 - **No premature optimization**: Basic polling is fine for now
 
 ### **Avoid ccusage Pitfalls:**
+
 - ❌ Don't copy cost analysis or usage tracking
 - ❌ Don't build MCP servers or complex APIs
 - ❌ Don't over-engineer the configuration system
@@ -297,6 +323,7 @@ Detailed engineering implementation plan with specific steps, file structure, an
 ## 🎯 **Success Criteria**
 
 ### **Functional Requirements:**
+
 - ✅ **Auto-continuation**: Reliably detects usage limits and continues sessions
 - ✅ **Remote approval**: Secure approval workflow via Discord
 - ✅ **Cross-platform**: Works on macOS, Linux, Windows (with tmux)
@@ -304,13 +331,15 @@ Detailed engineering implementation plan with specific steps, file structure, an
 - ✅ **Documentation**: Clear installation and usage instructions
 
 ### **Quality Requirements:**
+
 - ✅ **Type Safety**: Full TypeScript coverage with Zod validation
-- ✅ **Error Handling**: Graceful failures and informative error messages  
+- ✅ **Error Handling**: Graceful failures and informative error messages
 - ✅ **Performance**: Efficient polling, minimal resource usage
 - ✅ **Security**: Secure Discord integration, approval safeguards
 - ✅ **Maintainability**: Clean code structure, comprehensive tests
 
 ### **Distribution Requirements:**
+
 - ✅ **NPM Package**: Published and installable via `npm install -g ccremote`
 - ✅ **Domain**: ccremote.dev with documentation and examples
 - ✅ **CLI Usage**: `bunx ccremote` for quick execution
@@ -321,21 +350,25 @@ Detailed engineering implementation plan with specific steps, file structure, an
 ## 🌟 **Future Enhancements** (Post-MVP)
 
 ### **Platform Expansion:**
+
 - **Slack Support**: Same webhook approach as Discord
 - **Multiple Sessions**: Support monitoring multiple tmux sessions
 - **Better Scheduling**: More sophisticated early window scheduling
 
 ### **Quality of Life:**
+
 - **Web Interface**: Simple status page (maybe)
 - **Better Error Handling**: More robust failure recovery
 - **Configuration UI**: Simple setup wizard (maybe)
 
 ### **Advanced Features (Maybe):**
+
 - **Multi-user**: Team approval workflows
 - **Custom Commands**: User-defined automation
 - **Integration**: VS Code extension or shell integration
 
 ### **Website & Documentation:**
+
 - **ccremote.dev**: Simple landing page with setup guide
 - **Interactive Examples**: Copy-paste setup instructions
 - **Usage Patterns**: Common workflow documentation
@@ -346,10 +379,11 @@ Detailed engineering implementation plan with specific steps, file structure, an
 ## 🌐 **Simple Website Plan (ccremote.dev)**
 
 ### **Website Structure (Similar to CC Remote Style):**
+
 ```
 ccremote.dev/
 ├── index.html              # Landing page with hero, features, quick start
-├── setup.html              # Step-by-step setup guide  
+├── setup.html              # Step-by-step setup guide
 ├── examples.html           # Usage examples and workflows
 ├── css/
 │   └── style.css           # Simple, clean styling
@@ -358,6 +392,7 @@ ccremote.dev/
 ```
 
 ### **Content Strategy:**
+
 - **Hero Section**: "Remote Claude Code Control Made Simple"
 - **Feature Highlights**: Session management, Auto-continuation, Remote approvals, Early scheduling
 - **Quick Start**: `npm install -g ccremote` → setup Discord bot → `ccremote start`
@@ -365,6 +400,7 @@ ccremote.dev/
 - **Examples**: Multi-session workflows, team collaboration, troubleshooting
 
 ### **Key Usage Examples:**
+
 ```bash
 # Instead of: claude code
 ccremote start
@@ -380,6 +416,7 @@ ccremote status my-app
 ```
 
 ### **Design Approach:**
+
 - **Clean & minimal**: Similar to CC Remote readme but as a proper website
 - **Copy-paste friendly**: Easy to select commands and config examples
 - **Mobile responsive**: Works well on phones for reference
