@@ -30,19 +30,21 @@
 
 ## 🎯 **Target Architecture**
 
-### **Simplified Package Structure:**
+### **Updated Package Structure:**
 ```
 ccremote/
 ├── src/
 │   ├── commands/
 │   │   ├── index.ts              # Main CLI entry point
-│   │   ├── monitor.ts            # Combined monitoring daemon
-│   │   └── schedule.ts           # Early window scheduling
+│   │   ├── start.ts              # Start new session (replaces claude code)
+│   │   ├── list.ts               # List active sessions
+│   │   ├── stop.ts               # Stop session
+│   │   └── status.ts             # Show session status
 │   ├── core/
-│   │   ├── tmux.ts               # Simple tmux monitoring & injection
-│   │   ├── discord.ts            # Discord bot (webhook + interactions)
-│   │   ├── slack.ts              # Slack bot (future)
-│   │   ├── scheduler.ts          # Simple polling scheduler
+│   │   ├── session.ts            # Session management & state
+│   │   ├── tmux.ts               # Tmux monitoring & command injection
+│   │   ├── discord.ts            # Discord bot connection & handlers
+│   │   ├── monitor.ts            # Auto-continuation & approval monitoring
 │   │   └── parser.ts             # Time/pattern parsing utilities
 │   ├── types/
 │   │   └── index.ts              # TypeScript type definitions
@@ -67,28 +69,121 @@ ccremote/
 
 ## 🔧 **Core Features (Simplified)**
 
-### **1. Combined Monitoring Daemon**
+### **1. ccremote as Claude Code Replacement**
 
-**Purpose**: Single daemon that handles both auto-continuation and remote approvals via tmux monitoring.
+**Purpose**: Replace `claude` command with `ccremote` that sets up monitored tmux sessions with Discord integration.
 
 **Implementation:**
 ```typescript
-// src/commands/monitor.ts
-export const monitorCommand = {
-  name: 'monitor',
-  description: 'Monitor tmux session for limits and approvals',
+// src/commands/start.ts
+export const startCommand = {
+  name: 'start',
+  description: 'Start monitored Claude Code session',
   options: {
-    session: { type: 'string', default: 'claude' },
-    platform: { type: 'string', default: 'discord', choices: ['discord', 'slack'] }
+    name: { type: 'string', description: 'Session name (auto-generated if not provided)' },
+    channel: { type: 'string', description: 'Discord channel ID (optional)' }
   }
 }
 ```
 
+**Usage Examples:**
+```bash
+# Replace: claude code
+ccremote start
+
+# Named session
+ccremote start --name my-session
+
+# Specific Discord channel
+ccremote start --name my-session --channel 123456789
+```
+
 **Key Components:**
 - **Simple Tmux Monitoring**: Basic pane capture and pattern detection
-- **Smart Polling**: 30s → 5s → exact timing (from working proof of concept)
-- **Discord/Slack Notifications**: Minimal webhook-based notifications
+- **Event-based Scheduling**: "Execute once at X, latest by Y" - handles sleep/wake robustly
+- **Discord Bot Integration**: Real-time notifications and interactive responses
 - **Basic State Management**: Simple cooldown and spam prevention
+
+---
+
+## ⏰ **Robust Scheduling System (Alternative to Polling)**
+
+### **Ideal Scheduler Requirements:**
+```typescript
+interface ScheduledTask {
+  id: string
+  sessionId: string
+  type: 'continuation' | 'early_window'
+  executeAt: Date        // Target execution time
+  executeBy: Date        // Latest acceptable execution time
+  executed: boolean      // Track if completed
+  payload?: any          // Task-specific data
+}
+```
+
+### **Scheduling Strategies:**
+
+### **Implementation Approach: In-Memory Timers**
+Since the ccremote daemon is designed to run continuously, we can use simple `setTimeout()` without persistence:
+
+```typescript
+// When limit detected: "resets 7pm"
+const resetTime = parseTime("7pm")
+scheduler.scheduleContination("session-1", resetTime)
+
+// Internally uses setTimeout() for precise timing
+// No files, databases, or complex state management needed
+```
+
+**Why This Works:**
+- Daemon runs continuously (like the proof of concept)
+- Simple `setTimeout()` is reliable for scheduled execution
+- If daemon restarts, it will detect limits again and reschedule
+- Much simpler than polling every 30 seconds
+
+### **Simple In-Memory Event Scheduler**
+```typescript
+class SimpleEventScheduler {
+  private timers = new Map<string, NodeJS.Timeout>()
+  
+  // Schedule continuation when limit detected
+  scheduleContination(sessionId: string, resetTime: Date) {
+    const taskId = `continuation-${sessionId}`
+    const delay = resetTime.getTime() - Date.now()
+    
+    // Clear any existing timer for this session
+    this.clearTimer(taskId)
+    
+    // Schedule execution
+    if (delay > 0) {
+      const timer = setTimeout(() => {
+        this.executeContinuation(sessionId)
+        this.timers.delete(taskId)
+      }, delay)
+      
+      this.timers.set(taskId, timer)
+    } else {
+      // Time already passed, execute immediately
+      this.executeContinuation(sessionId)
+    }
+  }
+  
+  clearTimer(taskId: string) {
+    const timer = this.timers.get(taskId)
+    if (timer) {
+      clearTimeout(timer)
+      this.timers.delete(taskId)
+    }
+  }
+}
+```
+
+### **Benefits over Polling:**
+- ✅ **CPU Efficient**: No constant monitoring, just event-driven timers
+- ✅ **Simple**: No persistence, files, or external dependencies
+- ✅ **Precise Timing**: Uses native `setTimeout()` for exact execution
+- ✅ **Long-running Friendly**: Designed for daemon that stays running
+- ✅ **Self-cleaning**: Timers auto-cleanup after execution
 
 ### **2. Early Window Scheduling**
 
@@ -114,33 +209,91 @@ export const scheduleCommand = {
 
 ---
 
-## 🤖 **Simple Discord/Slack Integration**
+## 🤖 **Discord Bot Integration**
 
-### **Minimal Notification Types:**
+### **Bot Architecture:**
 ```typescript
-type Notification = {
+type SessionNotification = {
+  sessionId: string
+  sessionName: string
+  channelId: string
   type: 'limit' | 'continued' | 'approval'
   message: string
-  session?: string
-  resetTime?: string
+  metadata?: {
+    resetTime?: string
+    command?: string
+  }
 }
 ```
 
-### **Discord Implementation:**
-- **Webhook-based**: Simple POST requests, no complex bot setup
-- **Interactive Buttons**: Basic Approve/Deny buttons for approvals
-- **Commands**: `/approve`, `/deny` - that's it
+### **Discord Bot Implementation:**
+- **Token-based**: Discord bot connects via `DISCORD_BOT_TOKEN`
+- **Persistent Connection**: Listens for messages, can respond immediately
+- **Channel per Session**: Each ccremote session gets its own Discord channel
+- **Interactive Commands**: `approve`, `deny`, `status` within each channel
 
-### **Future Slack Support:**
-- **Similar webhook approach**: Keep it simple
-- **Slack buttons**: Native Slack interactive elements
-- **Same command patterns**: `/approve`, `/deny`
+### **Session Management:**
+```typescript
+type SessionState = {
+  id: string
+  name: string
+  tmuxSession: string
+  channelId: string
+  status: 'active' | 'waiting' | 'error'
+  lastActivity: string
+}
+```
 
-### **No Complex Features:**
-- ❌ No rich embeds or fancy formatting
-- ❌ No status commands or help systems  
-- ❌ No multiple channels or user management
-- ✅ Just the essentials: notifications and approvals
+### **Security Model:**
+- **Private Channels Only**: Bot only works in private channels/DMs
+- **Authorized Users**: Only bot owner and invited users can control sessions
+- **Channel Isolation**: Each session responds only to its designated channel
+- **Command Validation**: Verify user permissions before executing commands
+
+---
+
+## 🔒 **Security & Access Control**
+
+### **Bot Security Strategy:**
+```typescript
+type AuthConfig = {
+  ownerId: string                    // Primary bot owner (from DISCORD_OWNER_ID)
+  authorizedUsers: string[]          // Additional authorized user IDs
+  authorizedChannels: string[]       // Allowed channel IDs
+  requirePrivateChannel: boolean     // Only work in private channels
+}
+```
+
+### **Access Control Levels:**
+1. **Bot Owner**: Full access, can authorize others
+2. **Authorized Users**: Can create/control sessions in allowed channels
+3. **Channel Members**: Can view session status (read-only)
+4. **Everyone Else**: No access
+
+### **Security Implementation:**
+- **User ID Validation**: Check `message.author.id` against authorized list
+- **Channel Type Check**: Reject commands from public channels (optional setting)
+- **Session Ownership**: Users can only control sessions they created
+- **Command Rate Limiting**: Prevent spam/abuse
+- **Audit Logging**: Log all commands with user ID and timestamp
+
+### **Setup Security:**
+```bash
+# Required: Bot owner Discord user ID
+DISCORD_OWNER_ID=your_discord_user_id
+
+# Optional: Additional authorized users
+DISCORD_AUTHORIZED_USERS=user1,user2,user3
+
+# Optional: Restrict to private channels only
+REQUIRE_PRIVATE_CHANNELS=true
+```
+
+### **Team Collaboration:**
+- **Invite Colleagues**: Add their Discord user IDs to authorized list
+- **Shared Channels**: Create private channels for team projects
+- **Session Sharing**: Team members can view status but not control others' sessions
+- **Override Mode**: Owner can control any session for emergencies
 
 ---
 
@@ -148,43 +301,59 @@ type Notification = {
 
 ### **Environment Variables (.env):**
 ```bash
-# Discord Webhook (simplest setup)
-DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+# Discord Bot Configuration
+DISCORD_BOT_TOKEN=your_discord_bot_token
+DISCORD_OWNER_ID=your_discord_user_id    # For security validation
 
-# OR Slack Webhook
-SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
-
-# TMux Configuration  
-TMUX_SESSION=claude                   # Default session name
+# Optional: Default channel for new sessions
+DISCORD_DEFAULT_CHANNEL=channel_id
 ```
 
-### **No Complex Config Files:**
-- Environment variables only
-- Sensible defaults for everything
-- No JSON configs or schema validation
-- Keep it simple and get it working fast
+### **Session Storage (.ccremote/sessions.json):**
+```json
+{
+  "ccremote-1": {
+    "id": "ccremote-1",
+    "name": "my-session",
+    "tmuxSession": "ccremote-1",
+    "channelId": "123456789",
+    "status": "active",
+    "created": "2025-01-15T10:30:00Z",
+    "lastActivity": "2025-01-15T11:45:00Z"
+  }
+}
+```
+
+### **Simple Configuration:**
+- Minimal environment setup
+- Local JSON file for session tracking
+- Auto-generated session names (ccremote-1, ccremote-2, etc.)
+- Easy cleanup and session management
 
 ---
 
 ## 🚧 **Simplified Implementation Plan**
 
-### **Phase 1: Minimal Viable Product** ⏱️ 2-3 days
+### **Phase 1: Session Management & Discord Bot** ⏱️ 3-4 days
 - [ ] Create basic project structure (ccusage-inspired)
-- [ ] Port working auto-continuation daemon from proof of concept
-- [ ] Add simple Discord webhook notifications
-- [ ] Basic tmux monitoring (working patterns from PoC)
-- [ ] Single `ccremote monitor` command
+- [ ] Implement Discord bot with token-based connection
+- [ ] Session management system with local JSON storage
+- [ ] `ccremote start` command that replaces `claude`
+- [ ] Basic tmux session creation and monitoring
+- [ ] Channel-per-session Discord integration
 
-### **Phase 2: Remote Approvals** ⏱️ 2 days  
+### **Phase 2: Event-Driven Monitoring** ⏱️ 2-3 days  
+- [ ] Simple in-memory event scheduler (replace polling)
+- [ ] Port limit detection patterns from proof of concept
 - [ ] Port approval detection from proof of concept
-- [ ] Add Discord interactive buttons (simple webhook approach)
-- [ ] Basic approval workflow without complex state management
-- [ ] Test end-to-end approval flow
+- [ ] Discord message handling for approvals (`approve`/`deny`)
+- [ ] Test end-to-end session workflow with event scheduling
 
-### **Phase 3: Early Window Scheduling** ⏱️ 1 day
-- [ ] Simple scheduler for early morning dummy commands
-- [ ] Basic cron-like functionality for window optimization
-- [ ] Integration with existing monitoring
+### **Phase 3: Session Management Commands** ⏱️ 1-2 days
+- [ ] `ccremote list` - show active sessions
+- [ ] `ccremote stop` - stop specific session
+- [ ] `ccremote status` - detailed session status
+- [ ] Early window scheduling integration
 
 ### **Phase 4: Polish & Website** ⏱️ 2 days
 - [ ] Clean up code and add basic error handling
@@ -287,10 +456,25 @@ ccremote.dev/
 
 ### **Content Strategy:**
 - **Hero Section**: "Remote Claude Code Control Made Simple"
-- **Feature Highlights**: Auto-continuation, Remote approvals, Early scheduling
-- **Quick Start**: `npm install -g ccremote` → setup Discord → run monitor
-- **Setup Guide**: Discord webhook setup, environment variables, first run
-- **Examples**: Common workflows, troubleshooting, tips
+- **Feature Highlights**: Session management, Auto-continuation, Remote approvals, Early scheduling
+- **Quick Start**: `npm install -g ccremote` → setup Discord bot → `ccremote start`
+- **Setup Guide**: Discord bot creation, token setup, channel creation, first session
+- **Examples**: Multi-session workflows, team collaboration, troubleshooting
+
+### **Key Usage Examples:**
+```bash
+# Instead of: claude code
+ccremote start
+
+# Named project session
+ccremote start --name my-app
+
+# Check what's running
+ccremote list
+
+# Get session details
+ccremote status my-app
+```
 
 ### **Design Approach:**
 - **Clean & minimal**: Similar to CC Remote readme but as a proper website
