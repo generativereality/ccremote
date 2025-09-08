@@ -40,23 +40,16 @@ bun install -g ccremote
 
 1. **Initialize Configuration**:
    ```bash
-   ccremote init                    # Creates ccremote.env in current directory
-   ccremote init --global           # Creates ~/.ccremote.env globally
+   ccremote init                    # Interactive setup (creates ~/.ccremote.env by default)
    ```
+   
+   The interactive setup will:
+   - Ask whether to create global (~/.ccremote.env) or local (./ccremote.env) config
+   - Guide you through creating a Discord app and bot (only for you)
+   - Help you find your Discord bot token and user ID
+   - Generate a complete configuration file
 
-2. **Create a Discord Bot**:
-   - Go to [Discord Developer Portal](https://discord.com/developers/applications)
-   - Create a new application and bot
-   - Copy the bot token and your Discord user ID
-
-3. **Configure ccremote**:
-   Edit the created `ccremote.env` file:
-   ```bash
-   CCREMOTE_DISCORD_BOT_TOKEN=your_bot_token_here
-   CCREMOTE_DISCORD_OWNER_ID=your_discord_user_id
-   ```
-
-4. **Start a Monitored Session**:
+2. **Start a Monitored Session**:
    ```bash
    ccremote start --name "my-session"
    ```
@@ -70,9 +63,8 @@ bun install -g ccremote
 ## Usage
 
 ```bash
-# Initialize configuration
-ccremote init                            # Create project ccremote.env
-ccremote init --global                   # Create global ~/.ccremote.env  
+# Initialize configuration (interactive)
+ccremote init                            # Interactive setup (global by default)
 ccremote init --force                    # Overwrite existing config
 
 # Start a new monitored session
