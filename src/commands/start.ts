@@ -59,6 +59,7 @@ export const startCommand = define({
 
 			// Create session
 			const session = await sessionManager.createSession(name, channel);
+			const logFile = `.ccremote/session-${session.id}.log`;
 			consola.success(`Created session: ${session.name} (${session.id})`);
 
 			// Check if tmux session already exists (cleanup from previous run)
@@ -103,7 +104,6 @@ export const startCommand = define({
 			consola.info('Note: Monitoring continues in the background!');
 
 			// Create log file for monitoring output
-			const logFile = `.ccremote/session-${session.id}.log`;
 			const fs = await import('node:fs/promises');
 			await fs.writeFile(logFile, `ccremote session ${session.id} started at ${new Date().toISOString()}\n`);
 
@@ -158,6 +158,9 @@ export const startCommand = define({
 			// Set flag to redirect output to logs
 			attachedToTmux = true;
 			
+			// Enable silent mode for monitor to redirect all its logging to file
+			monitor.setSilentMode(true, logFile);
+			
 			// Attach to the tmux session
 			const { spawn } = await import('node:child_process');
 			
@@ -168,6 +171,9 @@ export const startCommand = define({
 			
 			attachProcess.on('exit', (code) => {
 				attachedToTmux = false; // Resume console output when detached
+				
+				// Disable silent mode for monitor to resume console logging
+				monitor.setSilentMode(false);
 				
 				if (code === 0) {
 					consola.info('');
