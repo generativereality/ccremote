@@ -29,9 +29,9 @@ export class DiscordBot {
 
 		await this.client.login(token);
 
-		// Wait for ready event
+		// Wait for clientReady event (v14+ replacement for ready)
 		return new Promise((resolve) => {
-			this.client.once('ready', () => {
+			this.client.once('clientReady', () => {
 				this.isReady = true;
 				console.info(`Discord bot logged in as ${this.client.user?.tag}`);
 				resolve();

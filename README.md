@@ -53,9 +53,12 @@ bun install -g ccremote
    ```bash
    ccremote start --name "my-session"
    ```
-   This automatically creates and attaches to a tmux session with Claude Code running.
+   This automatically:
+   - Creates a tmux session with Claude Code running
+   - Shows session details for 3 seconds
+   - Attaches you directly to the Claude Code session
 
-5. **Work Normally**:
+3. **Work Normally**:
    - Use Claude Code as usual in the attached session
    - ccremote monitors in the background and will automatically continue when limits reset
    - Get Discord notifications about session status

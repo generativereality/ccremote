@@ -6,9 +6,13 @@ const execAsync = promisify(exec);
 export class TmuxManager {
 	async createSession(sessionName: string): Promise<void> {
 		try {
-			// Create new tmux session with claude code
-			const command = `tmux new-session -d -s "${sessionName}" -c "${process.cwd()}" claude`;
-			await execAsync(command);
+			// Create new tmux session
+			const createCommand = `tmux new-session -d -s "${sessionName}" -c "${process.cwd()}"`;
+			await execAsync(createCommand);
+			
+			// Start Claude in the session
+			const startClaudeCommand = `tmux send-keys -t "${sessionName}" "claude" Enter`;
+			await execAsync(startClaudeCommand);
 		}
 		catch (error) {
 			throw new Error(`Failed to create tmux session: ${error instanceof Error ? error.message : error}`);

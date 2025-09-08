@@ -68,7 +68,7 @@ export const startCommand = define({
 			}
 
 			// Create tmux session with Claude Code
-			consola.info('Creating tmux session with Claude Code...');
+			consola.info('Creating tmux session and starting Claude Code...');
 			await tmuxManager.createSession(session.tmuxSession);
 
 			// Start Discord bot
@@ -95,13 +95,12 @@ export const startCommand = define({
 			consola.info(`  Tmux: ${session.tmuxSession}`);
 			consola.info(`  Discord Channel: ${channelId}`);
 			consola.info('');
-			consola.info('Next steps:');
-			consola.info(`  1. Attach to tmux session: tmux attach -t ${session.tmuxSession}`);
-			consola.info('  2. Use Claude Code normally - ccremote will monitor for limits and approvals');
-			consola.info('  3. Check Discord for notifications and approval requests');
-			consola.info(`  4. Stop session when done: ccremote stop ${session.id}`);
+			consola.info('💡 Usage:');
+			consola.info('  • Use Claude Code normally - ccremote will monitor for limits and approvals');
+			consola.info('  • Check Discord for notifications and approval requests');
+			consola.info(`  • Stop session when done: ccremote stop ${session.id}`);
 			consola.info('');
-			consola.info('Note: Keep this process running for monitoring to work!');
+			consola.info('Note: Monitoring continues in the background!');
 
 			// Set up monitoring event handlers
 			monitor.on('limit_detected', (event) => {
@@ -116,9 +115,8 @@ export const startCommand = define({
 				consola.error(`❌ Monitor error for ${event.sessionId}:`, event.data?.error);
 			});
 
-			// Start monitoring
-			consola.info('Starting monitoring system...');
-			await monitor.startMonitoring(session.id);
+			// Start monitoring in the background
+			void monitor.startMonitoring(session.id);
 
 			process.on('SIGINT', () => {
 				consola.info('\nShutting down...');
@@ -127,8 +125,38 @@ export const startCommand = define({
 				process.exit(0);
 			});
 
-			// Keep process alive
-			await new Promise<void>(() => {}); // Wait forever
+			// Give user a moment to read the info, then attach
+			consola.info('');
+			consola.info('🔄 Attaching to Claude Code session in 3 seconds...');
+			consola.info('   (Press Ctrl+B then D to detach and return to monitoring)');
+			
+			await new Promise(resolve => setTimeout(resolve, 3000));
+			
+			// Attach to the tmux session
+			const { spawn } = await import('node:child_process');
+			
+			// Use spawn to attach interactively
+			const attachProcess = spawn('tmux', ['attach-session', '-t', session.tmuxSession], {
+				stdio: 'inherit',
+			});
+			
+			attachProcess.on('exit', (code) => {
+				if (code === 0) {
+					consola.info('');
+					consola.info('👋 Detached from tmux session');
+					consola.info(`   Session ${session.id} is still running and being monitored`);
+					consola.info(`   Reattach anytime with: tmux attach -t ${session.tmuxSession}`);
+					consola.info(`   Stop session with: ccremote stop ${session.id}`);
+					consola.info('');
+					consola.info('🔄 Monitoring continues...');
+					
+					// Keep process alive for monitoring
+					return new Promise<void>(() => {}); // Wait forever
+				} else {
+					consola.error('Failed to attach to tmux session');
+					process.exit(1);
+				}
+			});
 		}
 		catch (error) {
 			consola.error('Failed to start session:', error instanceof Error ? error.message : error);
