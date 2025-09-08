@@ -6,8 +6,8 @@ const execAsync = promisify(exec);
 export class TmuxManager {
 	async createSession(sessionName: string): Promise<void> {
 		try {
-			// Create new tmux session
-			const createCommand = `tmux new-session -d -s "${sessionName}" -c "${process.cwd()}"`;
+			// Create new tmux session with mouse mode enabled
+			const createCommand = `tmux new-session -d -s "${sessionName}" -c "${process.cwd()}" \\; set -g mouse on`;
 			await execAsync(createCommand);
 			
 			// Start Claude in the session
