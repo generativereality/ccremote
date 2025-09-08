@@ -11,6 +11,13 @@ export type MonitoringOptions = {
 	logFile?: string; // optional log file for silent mode
 };
 
+type InternalMonitoringOptions = {
+	pollInterval: number;
+	maxRetries: number;
+	autoRestart: boolean;
+	logFile?: string;
+};
+
 export type MonitorEvent = {
 	type: 'limit_detected' | 'continuation_ready' | 'approval_needed' | 'error';
 	sessionId: string;
@@ -22,7 +29,7 @@ export class Monitor extends EventEmitter {
 	private sessionManager: SessionManager;
 	private tmuxManager: TmuxManager;
 	private discordBot: DiscordBot;
-	private options: Required<MonitoringOptions>;
+	private options: InternalMonitoringOptions;
 	private monitoringIntervals = new Map<string, NodeJS.Timeout>();
 	private sessionStates = new Map<string, {
 		lastOutput: string;
@@ -83,7 +90,7 @@ export class Monitor extends EventEmitter {
 			pollInterval: options.pollInterval || 2000,
 			maxRetries: options.maxRetries || 3,
 			autoRestart: options.autoRestart || true,
-			logFile: options.logFile || undefined,
+			logFile: options.logFile,
 		};
 		this.logFile = options.logFile;
 		this.silentMode = !!options.logFile;
@@ -399,6 +406,7 @@ export class Monitor extends EventEmitter {
 		// Notify Discord
 		await this.discordBot.sendNotification(sessionId, {
 			type: 'error',
+			sessionId,
 			sessionName: (await this.sessionManager.getSession(sessionId))?.name || sessionId,
 			message: 'Session ended - tmux session no longer exists.',
 		});
@@ -448,6 +456,7 @@ export class Monitor extends EventEmitter {
 			// Send notification
 			await this.discordBot.sendNotification(sessionId, {
 				type: 'continued',
+				sessionId,
 				sessionName: session.name,
 				message: 'Session automatically continued after limit reset.',
 			});

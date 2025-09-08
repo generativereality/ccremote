@@ -3,7 +3,7 @@ export type SessionState = {
 	name: string;
 	tmuxSession: string;
 	channelId: string;
-	status: 'active' | 'waiting' | 'error';
+	status: 'active' | 'waiting' | 'error' | 'waiting_approval' | 'ended';
 	created: string;
 	lastActivity: string;
 };
@@ -39,6 +39,11 @@ export type NotificationMessage = {
 		resetTime?: string;
 		toolName?: string;
 		command?: string;
+		detectedAt?: string;
+		action?: string;
+		question?: string;
+		approvalRequested?: boolean;
+		timestamp?: string;
 	};
 };
 
