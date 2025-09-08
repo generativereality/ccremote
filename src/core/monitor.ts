@@ -2,20 +2,12 @@ import type { DiscordBot } from './discord.js';
 import type { SessionManager } from './session.js';
 import type { TmuxManager } from './tmux.js';
 import { EventEmitter } from 'node:events';
-import { promises as fs } from 'node:fs';
+import { sessionLogger } from './logger.js';
 
 export type MonitoringOptions = {
 	pollInterval?: number; // milliseconds, default 2000
 	maxRetries?: number; // default 3
 	autoRestart?: boolean; // default true
-	logFile?: string; // optional log file for silent mode
-};
-
-type InternalMonitoringOptions = {
-	pollInterval: number;
-	maxRetries: number;
-	autoRestart: boolean;
-	logFile?: string;
 };
 
 export type MonitorEvent = {
@@ -29,7 +21,7 @@ export class Monitor extends EventEmitter {
 	private sessionManager: SessionManager;
 	private tmuxManager: TmuxManager;
 	private discordBot: DiscordBot;
-	private options: InternalMonitoringOptions;
+	private options: Required<MonitoringOptions>;
 	private monitoringIntervals = new Map<string, NodeJS.Timeout>();
 	private sessionStates = new Map<string, {
 		lastOutput: string;
@@ -38,26 +30,6 @@ export class Monitor extends EventEmitter {
 		retryCount: number;
 	}>();
 
-	private logFile?: string;
-	private silentMode: boolean = false;
-
-	private async log(level: 'info' | 'warn' | 'error', message: string): Promise<void> {
-		const timestamp = new Date().toISOString();
-		const logMessage = `${timestamp} [${level.toUpperCase()}] ${message}`;
-		
-		if (this.silentMode && this.logFile) {
-			await fs.appendFile(this.logFile, `${logMessage}\n`);
-		} else {
-			console[level](message);
-		}
-	}
-
-	setSilentMode(silent: boolean, logFile?: string): void {
-		this.silentMode = silent;
-		if (logFile) {
-			this.logFile = logFile;
-		}
-	}
 
 	// Pattern matching for Claude Code messages
 	private readonly patterns = {
@@ -90,10 +62,7 @@ export class Monitor extends EventEmitter {
 			pollInterval: options.pollInterval || 2000,
 			maxRetries: options.maxRetries || 3,
 			autoRestart: options.autoRestart || true,
-			logFile: options.logFile,
 		};
-		this.logFile = options.logFile;
-		this.silentMode = !!options.logFile;
 	}
 
 	async startMonitoring(sessionId: string): Promise<void> {
@@ -115,7 +84,7 @@ export class Monitor extends EventEmitter {
 		}, this.options.pollInterval);
 
 		this.monitoringIntervals.set(sessionId, interval);
-		await this.log('info', `Started monitoring session: ${sessionId}`);
+		await sessionLogger.info(`Started monitoring session: ${sessionId}`);
 	}
 
 	async stopMonitoring(sessionId: string): Promise<void> {
@@ -125,14 +94,14 @@ export class Monitor extends EventEmitter {
 			this.monitoringIntervals.delete(sessionId);
 		}
 		this.sessionStates.delete(sessionId);
-		await this.log('info', `Stopped monitoring session: ${sessionId}`);
+		await sessionLogger.info(`Stopped monitoring session: ${sessionId}`);
 	}
 
 	private async pollSession(sessionId: string): Promise<void> {
 		try {
 			const session = await this.sessionManager.getSession(sessionId);
 			if (!session) {
-				await this.log('warn', `Session ${sessionId} not found, stopping monitoring`);
+				await sessionLogger.warn(`Session ${sessionId} not found, stopping monitoring`);
 				await this.stopMonitoring(sessionId);
 				return;
 			}
@@ -140,7 +109,7 @@ export class Monitor extends EventEmitter {
 			// Check if tmux session still exists
 			const tmuxExists = await this.tmuxManager.sessionExists(session.tmuxSession);
 			if (!tmuxExists) {
-				await this.log('info', `Tmux session ${session.tmuxSession} no longer exists`);
+				await sessionLogger.info(`Tmux session ${session.tmuxSession} no longer exists`);
 				await this.handleSessionEnded(sessionId);
 				return;
 			}
@@ -150,7 +119,7 @@ export class Monitor extends EventEmitter {
 			await this.analyzeOutput(sessionId, currentOutput);
 		}
 		catch (error) {
-			await this.log('error', `Error polling session ${sessionId}: ${error}`);
+			await sessionLogger.error(`Error polling session ${sessionId}: ${error}`);
 			await this.handlePollingError(sessionId, error);
 		}
 	}
@@ -196,7 +165,7 @@ export class Monitor extends EventEmitter {
 
 		// Check for usage limit
 		if (this.patterns.usageLimit.test(output) && !sessionState.awaitingContinuation) {
-			await this.log('info', `Usage limit detected for session ${sessionId}`);
+			await sessionLogger.info(`Usage limit detected for session ${sessionId}`);
 			sessionState.limitDetectedAt = new Date();
 			sessionState.awaitingContinuation = true;
 
@@ -205,13 +174,13 @@ export class Monitor extends EventEmitter {
 
 		// Check for continuation readiness (after limit was detected)
 		if (sessionState.awaitingContinuation && this.patterns.continuationReady.test(output)) {
-			await this.log('info', `Continuation ready detected for session ${sessionId}`);
+			await sessionLogger.info(`Continuation ready detected for session ${sessionId}`);
 			await this.handleContinuationReady(sessionId, output);
 		}
 
 		// Check for Claude Code approval dialogs
 		if (this.detectApprovalDialog(output)) {
-			await this.log('info', `Approval dialog detected for session ${sessionId}`);
+			await sessionLogger.info(`Approval dialog detected for session ${sessionId}`);
 			await this.handleApprovalRequest(sessionId, output);
 		}
 	}
@@ -366,7 +335,7 @@ export class Monitor extends EventEmitter {
 		// Prevent duplicate notifications for the same approval
 		const approvalKey = approvalInfo.question;
 		if ((sessionState as any).lastApprovalQuestion === approvalKey) {
-			await this.log('info', 'Skipping duplicate approval request');
+			await sessionLogger.info('Skipping duplicate approval request');
 			return;
 		}
 		(sessionState as any).lastApprovalQuestion = approvalKey;
@@ -421,7 +390,7 @@ export class Monitor extends EventEmitter {
 		sessionState.retryCount++;
 
 		if (sessionState.retryCount >= this.options.maxRetries) {
-			await this.log('error', `Max retries exceeded for session ${sessionId}, stopping monitoring`);
+			await sessionLogger.error(`Max retries exceeded for session ${sessionId}, stopping monitoring`);
 			await this.stopMonitoring(sessionId);
 
 			const event: MonitorEvent = {
@@ -434,7 +403,7 @@ export class Monitor extends EventEmitter {
 			this.emit('error', event);
 		}
 		else {
-			await this.log('warn', `Polling error for session ${sessionId}, retry ${sessionState.retryCount}/${this.options.maxRetries}`);
+			await sessionLogger.warn(`Polling error for session ${sessionId}, retry ${sessionState.retryCount}/${this.options.maxRetries}`);
 		}
 	}
 
@@ -445,7 +414,7 @@ export class Monitor extends EventEmitter {
 				return;
 			}
 
-			await this.log('info', `Performing auto-continuation for session ${sessionId}`);
+			await sessionLogger.info(`Performing auto-continuation for session ${sessionId}`);
 
 			// Use the proper continuation command
 			await this.tmuxManager.sendContinueCommand(session.tmuxSession);
@@ -461,10 +430,10 @@ export class Monitor extends EventEmitter {
 				message: 'Session automatically continued after limit reset.',
 			});
 
-			await this.log('info', `Auto-continuation completed for session ${sessionId}`);
+			await sessionLogger.info(`Auto-continuation completed for session ${sessionId}`);
 		}
 		catch (error) {
-			await this.log('error', `Auto-continuation failed for session ${sessionId}: ${error}`);
+			await sessionLogger.error(`Auto-continuation failed for session ${sessionId}: ${error}`);
 		}
 	}
 

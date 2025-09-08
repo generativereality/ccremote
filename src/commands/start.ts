@@ -2,6 +2,7 @@ import { consola } from 'consola';
 import { define } from 'gunshi';
 import { loadConfig, validateConfig } from '../core/config.js';
 import { DiscordBot } from '../core/discord.js';
+import { setSilentMode, setSessionLogFile } from '../core/logger.js';
 import { Monitor } from '../core/monitor.js';
 import { SessionManager } from '../core/session.js';
 import { TmuxManager } from '../core/tmux.js';
@@ -106,6 +107,9 @@ export const startCommand = define({
 			// Create log file for monitoring output
 			const fs = await import('node:fs/promises');
 			await fs.writeFile(logFile, `ccremote session ${session.id} started at ${new Date().toISOString()}\n`);
+			
+			// Configure session-specific file logging
+			setSessionLogFile(logFile);
 
 			// Set up monitoring event handlers (write to log instead of console after attach)
 			let attachedToTmux = false;
@@ -158,8 +162,8 @@ export const startCommand = define({
 			// Set flag to redirect output to logs
 			attachedToTmux = true;
 			
-			// Enable silent mode for monitor to redirect all its logging to file
-			monitor.setSilentMode(true, logFile);
+			// Enable silent mode to redirect all daemon logging to file
+			setSilentMode(true);
 			
 			// Attach to the tmux session
 			const { spawn } = await import('node:child_process');
@@ -172,8 +176,8 @@ export const startCommand = define({
 			attachProcess.on('exit', (code) => {
 				attachedToTmux = false; // Resume console output when detached
 				
-				// Disable silent mode for monitor to resume console logging
-				monitor.setSilentMode(false);
+				// Disable silent mode to resume console logging
+				setSilentMode(false);
 				
 				if (code === 0) {
 					consola.info('');
