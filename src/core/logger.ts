@@ -22,7 +22,7 @@ const packageName: string = packageJson.name || 'ccremote';
 /**
  * Application logger instance with package name tag
  */
-export const logger: ConsolaInstance = consola.withTag(packageName as string);
+export const logger: ConsolaInstance = consola.withTag(packageName);
 
 // Apply LOG_LEVEL environment variable if set
 if (process.env.LOG_LEVEL != null) {
@@ -41,12 +41,108 @@ export const log = console.log;
 // Global state for file logging
 let sessionLogFile: string | null = null;
 
+// Store original stdout/stderr for restoration
+let originalStdout: typeof process.stdout.write | null = null;
+let originalStderr: typeof process.stderr.write | null = null;
+let silentModeActive = false;
+let unhandledExceptionListener: ((error: Error) => void) | null = null;
+let unhandledRejectionListener: ((reason: any) => void) | null = null;
+
 /**
- * Set logger to silent mode (level 0) to suppress console output
+ * Write any output to the session log file instead of console
+ */
+function writeToLogFile(chunk: any): void {
+	if (sessionLogFile && chunk) {
+		const message = chunk.toString();
+		if (message.trim()) {
+			// Write to log file asynchronously, don't wait for it
+			void fs.appendFile(sessionLogFile, `${new Date().toISOString()} [STDOUT/STDERR] ${message}`);
+		}
+	}
+}
+
+/**
+ * Set logger to silent mode and redirect ALL process output
  * This is used when attaching to tmux to avoid garbling the output
  */
 export function setSilentMode(silent: boolean): void {
 	logger.level = silent ? 0 : 3; // 0 = silent, 3 = info level (consola default)
+
+	if (silent && !silentModeActive) {
+		// Store original methods
+		originalStdout = process.stdout.write;
+		originalStderr = process.stderr.write;
+
+		// Redirect stdout to log file or suppress entirely
+		process.stdout.write = function (chunk: any, encoding?: any, callback?: any): boolean {
+			writeToLogFile(chunk);
+			// Call callback if provided to maintain compatibility
+			if (typeof encoding === 'function') {
+				encoding(); // encoding is actually the callback
+			}
+			else if (callback) {
+				callback();
+			}
+			return true; // Always return true to indicate success
+		} as any;
+
+		// Redirect stderr to log file or suppress entirely
+		process.stderr.write = function (chunk: any, encoding?: any, callback?: any): boolean {
+			writeToLogFile(chunk);
+			// Call callback if provided to maintain compatibility
+			if (typeof encoding === 'function') {
+				encoding(); // encoding is actually the callback
+			}
+			else if (callback) {
+				callback();
+			}
+			return true; // Always return true to indicate success
+		} as any;
+
+		// Set up exception handlers to log to file instead of stderr
+		unhandledExceptionListener = (error: Error) => {
+			if (sessionLogFile) {
+				void fs.appendFile(sessionLogFile, `${new Date().toISOString()} [UNCAUGHT EXCEPTION] ${error.stack || error.message}\n`);
+			}
+			// Don't call the default handler which would print to stderr
+		};
+
+		unhandledRejectionListener = (reason: any) => {
+			if (sessionLogFile) {
+				const message = reason instanceof Error ? (reason.stack || reason.message) : String(reason);
+				void fs.appendFile(sessionLogFile, `${new Date().toISOString()} [UNHANDLED REJECTION] ${message}\n`);
+			}
+			// Don't call the default handler which would print to stderr
+		};
+
+		process.on('uncaughtException', unhandledExceptionListener);
+		process.on('unhandledRejection', unhandledRejectionListener);
+
+		silentModeActive = true;
+	}
+	else if (!silent && silentModeActive) {
+		// Restore original stdout/stderr
+		if (originalStdout) {
+			process.stdout.write = originalStdout;
+		}
+		if (originalStderr) {
+			process.stderr.write = originalStderr;
+		}
+
+		// Remove exception handlers
+		if (unhandledExceptionListener) {
+			process.removeListener('uncaughtException', unhandledExceptionListener);
+			unhandledExceptionListener = null;
+		}
+		if (unhandledRejectionListener) {
+			process.removeListener('unhandledRejection', unhandledRejectionListener);
+			unhandledRejectionListener = null;
+		}
+
+		silentModeActive = false;
+		originalStdout = null;
+		originalStderr = null;
+	}
 }
 
 /**

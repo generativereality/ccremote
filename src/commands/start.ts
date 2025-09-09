@@ -176,7 +176,7 @@ export const startCommand = define({
 				stdio: 'inherit',
 			});
 
-			attachProcess.on('exit', (code) => {
+			attachProcess.on('exit', async (code) => {
 				attachedToTmux = false; // Resume console output when detached
 
 				// Disable silent mode to resume console logging
