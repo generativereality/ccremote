@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/wrangler/config-schema.json",
-  "name": "ccremote-docs",
-  "compatibility_date": "2025-01-20",
+  "name": "ccremote-website",
+  "compatibility_date": "2025-07-21",
   "build": {
     "command": "bun run build"
   },
