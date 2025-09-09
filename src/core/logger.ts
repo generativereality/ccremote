@@ -41,9 +41,13 @@ export const log = console.log;
 // Global state for file logging
 let sessionLogFile: string | null = null;
 
-// Store original stdout/stderr for restoration
+// Store original stdout/stderr and console methods for restoration
 let originalStdout: typeof process.stdout.write | null = null;
 let originalStderr: typeof process.stderr.write | null = null;
+let originalConsoleLog: typeof console.log | null = null;
+let originalConsoleError: typeof console.error | null = null;
+let originalConsoleWarn: typeof console.warn | null = null;
+let originalConsoleInfo: typeof console.info | null = null;
 let silentModeActive = false;
 let unhandledExceptionListener: ((error: Error) => void) | null = null;
 let unhandledRejectionListener: ((reason: any) => void) | null = null;
@@ -56,9 +60,17 @@ function writeToLogFile(chunk: any): void {
 		const message = chunk.toString();
 		if (message.trim()) {
 			// Write to log file asynchronously, don't wait for it
+			// Add more context to help debug what's being captured
 			void fs.appendFile(sessionLogFile, `${new Date().toISOString()} [STDOUT/STDERR] ${message}`);
 		}
 	}
+}
+
+/**
+ * Check if silent mode is currently active (for debugging)
+ */
+export function isSilentModeActive(): boolean {
+	return silentModeActive;
 }
 
 /**
@@ -72,6 +84,10 @@ export function setSilentMode(silent: boolean): void {
 		// Store original methods
 		originalStdout = process.stdout.write;
 		originalStderr = process.stderr.write;
+		originalConsoleLog = console.log;
+		originalConsoleError = console.error;
+		originalConsoleWarn = console.warn;
+		originalConsoleInfo = console.info;
 
 		// Redirect stdout to log file or suppress entirely
 		process.stdout.write = function (chunk: any, encoding?: any, callback?: any): boolean {
@@ -99,12 +115,13 @@ export function setSilentMode(silent: boolean): void {
 			return true; // Always return true to indicate success
 		} as any;
 
-		// Set up exception handlers to log to file instead of stderr
+		// Set up comprehensive exception handlers to log to file instead of stderr
 		unhandledExceptionListener = (error: Error) => {
 			if (sessionLogFile) {
 				void fs.appendFile(sessionLogFile, `${new Date().toISOString()} [UNCAUGHT EXCEPTION] ${error.stack || error.message}\n`);
 			}
-			// Don't call the default handler which would print to stderr
+			// Prevent the default handler from printing to stderr by not re-throwing
+			// Note: This will NOT crash the process - just silently log the error
 		};
 
 		unhandledRejectionListener = (reason: any) => {
@@ -112,11 +129,32 @@ export function setSilentMode(silent: boolean): void {
 				const message = reason instanceof Error ? (reason.stack || reason.message) : String(reason);
 				void fs.appendFile(sessionLogFile, `${new Date().toISOString()} [UNHANDLED REJECTION] ${message}\n`);
 			}
-			// Don't call the default handler which would print to stderr
+			// Prevent the default handler from printing to stderr
 		};
 
 		process.on('uncaughtException', unhandledExceptionListener);
 		process.on('unhandledRejection', unhandledRejectionListener);
+
+		// Hijack console methods to redirect to log file
+		console.log = function(...args: any[]) {
+			const message = args.map(arg => typeof arg === 'string' ? arg : JSON.stringify(arg)).join(' ');
+			writeToLogFile(`[console.log] ${message}\n`);
+		};
+
+		console.error = function(...args: any[]) {
+			const message = args.map(arg => typeof arg === 'string' ? arg : JSON.stringify(arg)).join(' ');
+			writeToLogFile(`[console.error] ${message}\n`);
+		};
+
+		console.warn = function(...args: any[]) {
+			const message = args.map(arg => typeof arg === 'string' ? arg : JSON.stringify(arg)).join(' ');
+			writeToLogFile(`[console.warn] ${message}\n`);
+		};
+
+		console.info = function(...args: any[]) {
+			const message = args.map(arg => typeof arg === 'string' ? arg : JSON.stringify(arg)).join(' ');
+			writeToLogFile(`[console.info] ${message}\n`);
+		};
 
 		silentModeActive = true;
 	}
@@ -139,9 +177,27 @@ export function setSilentMode(silent: boolean): void {
 			unhandledRejectionListener = null;
 		}
 
+		// Restore console methods
+		if (originalConsoleLog) {
+			console.log = originalConsoleLog;
+		}
+		if (originalConsoleError) {
+			console.error = originalConsoleError;
+		}
+		if (originalConsoleWarn) {
+			console.warn = originalConsoleWarn;
+		}
+		if (originalConsoleInfo) {
+			console.info = originalConsoleInfo;
+		}
+
 		silentModeActive = false;
 		originalStdout = null;
 		originalStderr = null;
+		originalConsoleLog = null;
+		originalConsoleError = null;
+		originalConsoleWarn = null;
+		originalConsoleInfo = null;
 	}
 }
 
