@@ -150,7 +150,7 @@ CCREMOTE_AUTO_RESTART=true           # Auto-restart monitoring on failure
 ## Requirements
 
 - **Node.js** 20.19.4 or higher
-- **tmux** (for session management)
+- **tmux** (for session management) - **Important**: macOS ships with tmux 3.3a which has a critical bug causing crashes when mouse mode is enabled. Install the latest version: `brew install tmux`
 - **Discord bot** (for notifications)
 
 ## Development
