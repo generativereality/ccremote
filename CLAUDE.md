@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+**Important**: Always read the README.md file in full before starting any task. It contains essential user-facing information about requirements, setup, and usage that may be critical for helping users effectively.
+
 ## Project Overview
 
 ccremote is a CLI tool that provides remote control for Claude Code sessions with Discord integration. It monitors Claude Code sessions, automatically continues them when usage limits reset, and provides Discord notifications for session events and approval requests.
