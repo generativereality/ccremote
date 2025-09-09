@@ -11,14 +11,20 @@ export default withMermaid(defineConfig({
 	ignoreDeadLinks: true,
 
 	head: [
-		['link', { rel: 'icon', href: '/favicon.svg' }],
+		['link', { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }],
+		['link', { rel: 'icon', type: 'image/png', sizes: '32x32', href: '/favicon-32x32.png' }],
+		['link', { rel: 'icon', type: 'image/png', sizes: '16x16', href: '/favicon-16x16.png' }],
+		['link', { rel: 'shortcut icon', href: '/favicon.png' }],
 		['meta', { name: 'theme-color', content: '#5865f2' }],
 		['meta', { property: 'og:type', content: 'website' }],
 		['meta', { property: 'og:locale', content: 'en' }],
 		['meta', { property: 'og:title', content: 'ccremote | Remote Claude Code Control' }],
 		['meta', { property: 'og:site_name', content: 'ccremote' }],
-		['meta', { property: 'og:image', content: 'https://cdn.jsdelivr.net/gh/augmentedmind/ccremote@main/docs/public/logo.png' }],
-		['meta', { property: 'og:url', content: 'https://github.com/augmentedmind/ccremote' }],
+		['meta', { property: 'og:description', content: 'Remote Claude Code control with auto-continuation and Discord notifications' }],
+		['meta', { property: 'og:image', content: 'https://ccremote.dev/og-image.png' }],
+		['meta', { property: 'og:url', content: 'https://ccremote.dev' }],
+		['meta', { name: 'twitter:card', content: 'summary_large_image' }],
+		['meta', { name: 'twitter:image', content: 'https://ccremote.dev/og-image.png' }],
 	],
 
 	themeConfig: {
