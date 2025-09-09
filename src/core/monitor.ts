@@ -494,8 +494,8 @@ export class Monitor extends EventEmitter {
 
 			const sessionState = this.sessionStates.get(sessionId);
 			if (!sessionState) {
-			return;
-		}
+				return;
+			}
 
 			await sessionLogger.info(`Performing auto-continuation for session ${sessionId}`);
 
@@ -635,7 +635,6 @@ export class Monitor extends EventEmitter {
 			return null;
 		}
 	}
-
 
 	async stopAll(): Promise<void> {
 		const sessionIds = Array.from(this.monitoringIntervals.keys());
