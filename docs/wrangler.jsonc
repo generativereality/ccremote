@@ -1,0 +1,12 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "ccremote-docs",
+  "compatibility_date": "2025-01-20",
+  "build": {
+    "command": "bun run build"
+  },
+  "assets": {
+    "directory": ".vitepress/dist/",
+    "not_found_handling": "404-page"
+  }
+}
