@@ -99,10 +99,16 @@ export class TmuxManager {
 	}
 
 	async sendContinueCommand(sessionName: string): Promise<void> {
-		// Sequence for continuing Claude session
+		// Proper sequence for continuing Claude session (from working proof-of-concept)
 		await this.clearInput(sessionName);
-		await new Promise(resolve => setTimeout(resolve, 100)); // Brief delay
-		await this.sendKeys(sessionName, 'continue');
+		await new Promise(resolve => setTimeout(resolve, 200)); // Brief delay
+
+		// Send 'continue' without Enter first
+		await this.sendRawKeys(sessionName, 'continue');
+		await new Promise(resolve => setTimeout(resolve, 200)); // Brief delay
+
+		// Then send Enter to execute
+		await this.sendRawKeys(sessionName, 'Enter');
 	}
 
 	async sendApprovalResponse(sessionName: string, approved: boolean): Promise<void> {
