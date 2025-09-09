@@ -1,10 +1,13 @@
 import type { SessionState } from '../types/index.js';
+import { randomBytes } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import { dirname } from 'node:path';
 
 export class SessionManager {
 	private sessionsFile = '.ccremote/sessions.json';
 	private sessions: Map<string, SessionState> = new Map();
+	private lockFile = '.ccremote/sessions.lock';
+	private writeLock: Promise<void> = Promise.resolve();
 
 	async initialize(): Promise<void> {
 		await this.ensureConfigDir();
@@ -22,27 +25,106 @@ export class SessionManager {
 	}
 
 	private async loadSessions(): Promise<void> {
-		try {
-			const data = await fs.readFile(this.sessionsFile, 'utf-8');
-			const sessionData = JSON.parse(data) as Record<string, unknown>;
+		await this.withWriteLock(async () => {
+			try {
+				const data = await fs.readFile(this.sessionsFile, 'utf-8');
+				const sessionData = JSON.parse(data) as Record<string, unknown>;
 
-			for (const [id, session] of Object.entries(sessionData)) {
-				this.sessions.set(id, session as SessionState);
+				this.sessions.clear();
+				for (const [id, session] of Object.entries(sessionData)) {
+					this.sessions.set(id, session as SessionState);
+				}
 			}
-		}
-		catch {
-			// File doesn't exist or invalid JSON - start with empty sessions
-			this.sessions.clear();
-		}
+			catch {
+				// File doesn't exist or invalid JSON - start with empty sessions
+				this.sessions.clear();
+			}
+		});
 	}
 
 	private async saveSessions(): Promise<void> {
+		await this.withWriteLock(async () => {
+			await this.writeSessionsToFile();
+		});
+	}
+
+	private async writeSessionsToFile(): Promise<void> {
 		const sessionData: Record<string, SessionState> = {};
 		for (const [id, session] of this.sessions) {
 			sessionData[id] = session;
 		}
 
-		await fs.writeFile(this.sessionsFile, JSON.stringify(sessionData, null, 2));
+		// Write atomically using temp file
+		const tempFile = `${this.sessionsFile}.tmp.${randomBytes(4).toString('hex')}`;
+		await fs.writeFile(tempFile, JSON.stringify(sessionData, null, 2));
+		await fs.rename(tempFile, this.sessionsFile);
+	}
+
+	private async loadSessionsFromDisk(): Promise<void> {
+		try {
+			const data = await fs.readFile(this.sessionsFile, 'utf-8');
+			const sessionData = JSON.parse(data) as Record<string, unknown>;
+
+			this.sessions.clear();
+			for (const [id, session] of Object.entries(sessionData)) {
+				this.sessions.set(id, session as SessionState);
+			}
+		}
+		catch {
+			// File doesn't exist or invalid JSON - keep current sessions
+		}
+	}
+
+	private async mergeFromDisk(): Promise<void> {
+		try {
+			const data = await fs.readFile(this.sessionsFile, 'utf-8');
+			const sessionData = JSON.parse(data) as Record<string, unknown>;
+
+			// Merge disk state with current state, preserving in-memory changes
+			for (const [id, diskSession] of Object.entries(sessionData)) {
+				const currentSession = this.sessions.get(id);
+				if (currentSession) {
+					// Update with disk data but preserve recent changes by comparing lastActivity
+					const diskState = diskSession as SessionState;
+					if (new Date(diskState.lastActivity) > new Date(currentSession.lastActivity)) {
+						this.sessions.set(id, diskState);
+					}
+				}
+				else {
+					// New session from disk
+					this.sessions.set(id, diskSession as SessionState);
+				}
+			}
+		}
+		catch {
+			// File doesn't exist or invalid JSON - keep current sessions
+		}
+	}
+
+	private async withWriteLock<T>(fn: () => Promise<T>): Promise<T> {
+		// Chain the operation after the current lock
+		const currentLock = this.writeLock;
+		let resolve: (value: T) => void;
+		let reject: (error: any) => void;
+
+		this.writeLock = new Promise<void>((res, rej) => {
+			currentLock.then(async () => {
+				try {
+					const result = await fn();
+					resolve(result);
+					res();
+				}
+				catch (error) {
+					reject(error);
+					rej(error);
+				}
+			}).catch(rej);
+		});
+
+		return new Promise<T>((res, rej) => {
+			resolve = res;
+			reject = rej;
+		});
 	}
 
 	async createSession(name?: string, channelId?: string): Promise<SessionState> {
@@ -84,26 +166,36 @@ export class SessionManager {
 	}
 
 	async updateSession(id: string, updates: Partial<SessionState>): Promise<void> {
-		const session = this.sessions.get(id);
-		if (!session) {
-			throw new Error(`Session not found: ${id}`);
-		}
+		await this.withWriteLock(async () => {
+			// Reload from disk to get latest state
+			await this.mergeFromDisk();
 
-		// Update session
-		Object.assign(session, updates, {
-			lastActivity: new Date().toISOString(),
+			const session = this.sessions.get(id);
+			if (!session) {
+				throw new Error(`Session not found: ${id}`);
+			}
+
+			// Update session
+			Object.assign(session, updates, {
+				lastActivity: new Date().toISOString(),
+			});
+
+			await this.writeSessionsToFile();
 		});
-
-		await this.saveSessions();
 	}
 
 	async deleteSession(id: string): Promise<void> {
-		if (!this.sessions.has(id)) {
-			throw new Error(`Session not found: ${id}`);
-		}
+		await this.withWriteLock(async () => {
+			// Reload from disk to get latest state
+			await this.mergeFromDisk();
 
-		this.sessions.delete(id);
-		await this.saveSessions();
+			if (!this.sessions.has(id)) {
+				throw new Error(`Session not found: ${id}`);
+			}
+
+			this.sessions.delete(id);
+			await this.writeSessionsToFile();
+		});
 	}
 
 	private generateSessionId(): string {
