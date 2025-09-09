@@ -301,4 +301,4 @@ Now that you understand monitoring:
 2. **[Troubleshooting](./troubleshooting.md)** - Solve common issues
 3. **[Configuration](./configuration.md)** - Customize monitoring behavior
 
-For advanced monitoring setups, see the [GitHub repository](https://github.com/augmentedmind/ccremote) for additional configuration options.
+For advanced monitoring setups, see the [GitHub repository](https://github.com/generativereality/ccremote) for additional configuration options.

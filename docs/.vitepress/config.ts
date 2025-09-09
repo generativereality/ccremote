@@ -29,9 +29,9 @@ export default withMermaid(defineConfig({
 			{
 				text: 'Links',
 				items: [
-					{ text: 'GitHub', link: 'https://github.com/augmentedmind/ccremote' },
+					{ text: 'GitHub', link: 'https://github.com/generativereality/ccremote' },
 					{ text: 'npm', link: 'https://www.npmjs.com/package/ccremote' },
-					{ text: 'Changelog', link: 'https://github.com/augmentedmind/ccremote/releases' },
+					{ text: 'Changelog', link: 'https://github.com/generativereality/ccremote/releases' },
 				],
 			},
 		],
@@ -65,7 +65,7 @@ export default withMermaid(defineConfig({
 		},
 
 		socialLinks: [
-			{ icon: 'github', link: 'https://github.com/augmentedmind/ccremote' },
+			{ icon: 'github', link: 'https://github.com/generativereality/ccremote' },
 			{ icon: 'npm', link: 'https://www.npmjs.com/package/ccremote' },
 		],
 
@@ -79,7 +79,7 @@ export default withMermaid(defineConfig({
 		},
 
 		editLink: {
-			pattern: 'https://github.com/augmentedmind/ccremote/edit/main/docs/:path',
+			pattern: 'https://github.com/generativereality/ccremote/edit/main/docs/:path',
 			text: 'Edit this page on GitHub',
 		},
 

@@ -87,7 +87,7 @@ If you want to contribute to ccremote or run the latest development version:
 
 ```bash
 # Clone the repository
-git clone https://github.com/augmentedmind/ccremote.git
+git clone https://github.com/generativereality/ccremote.git
 cd ccremote
 
 # Install dependencies
@@ -150,4 +150,4 @@ If tmux commands fail:
 
 ### Still Having Issues?
 
-Check our [Troubleshooting guide](./troubleshooting.md) or open an issue on [GitHub](https://github.com/augmentedmind/ccremote/issues).
+Check our [Troubleshooting guide](./troubleshooting.md) or open an issue on [GitHub](https://github.com/generativereality/ccremote/issues).
