@@ -481,4 +481,4 @@ Now that you know all the commands:
 2. **[Configuration](./configuration.md)** - Customize ccremote behavior
 3. **[Session Monitoring](./monitoring.md)** - Understand how monitoring works
 
-For more examples and advanced usage, see the [GitHub repository](https://github.com/generative-reality/ccremote).
+For more examples and advanced usage, see the [GitHub repository](https://github.com/augmentedmind/ccremote).

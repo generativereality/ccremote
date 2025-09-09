@@ -287,4 +287,4 @@ Once your Discord bot is set up:
 3. **[Session Monitoring](./monitoring.md)** - Understand how monitoring works
 4. **[Commands Reference](./commands.md)** - Complete command reference
 
-Need help? Check the [Troubleshooting guide](./troubleshooting.md) or open an issue on [GitHub](https://github.com/generative-reality/ccremote/issues).
+Need help? Check the [Troubleshooting guide](./troubleshooting.md) or open an issue on [GitHub](https://github.com/augmentedmind/ccremote/issues).

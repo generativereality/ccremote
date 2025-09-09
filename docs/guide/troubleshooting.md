@@ -546,7 +546,7 @@ curl -I https://discord.com/api/v10/gateway
 
 If you're still having issues:
 
-1. **Check existing issues**: [GitHub Issues](https://github.com/generative-reality/ccremote/issues)
+1. **Check existing issues**: [GitHub Issues](https://github.com/augmentedmind/ccremote/issues)
 
 2. **Create bug report** with:
    - System information (OS, Node.js, tmux versions)

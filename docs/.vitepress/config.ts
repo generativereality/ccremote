@@ -17,8 +17,8 @@ export default withMermaid(defineConfig({
 		['meta', { property: 'og:locale', content: 'en' }],
 		['meta', { property: 'og:title', content: 'ccremote | Remote Claude Code Control' }],
 		['meta', { property: 'og:site_name', content: 'ccremote' }],
-		['meta', { property: 'og:image', content: 'https://cdn.jsdelivr.net/gh/generative-reality/ccremote@main/docs/public/logo.png' }],
-		['meta', { property: 'og:url', content: 'https://github.com/generative-reality/ccremote' }],
+		['meta', { property: 'og:image', content: 'https://cdn.jsdelivr.net/gh/augmentedmind/ccremote@main/docs/public/logo.png' }],
+		['meta', { property: 'og:url', content: 'https://github.com/augmentedmind/ccremote' }],
 	],
 
 	themeConfig: {
@@ -29,9 +29,9 @@ export default withMermaid(defineConfig({
 			{
 				text: 'Links',
 				items: [
-					{ text: 'GitHub', link: 'https://github.com/generative-reality/ccremote' },
+					{ text: 'GitHub', link: 'https://github.com/augmentedmind/ccremote' },
 					{ text: 'npm', link: 'https://www.npmjs.com/package/ccremote' },
-					{ text: 'Changelog', link: 'https://github.com/generative-reality/ccremote/releases' },
+					{ text: 'Changelog', link: 'https://github.com/augmentedmind/ccremote/releases' },
 				],
 			},
 		],
@@ -65,7 +65,7 @@ export default withMermaid(defineConfig({
 		},
 
 		socialLinks: [
-			{ icon: 'github', link: 'https://github.com/generative-reality/ccremote' },
+			{ icon: 'github', link: 'https://github.com/augmentedmind/ccremote' },
 			{ icon: 'npm', link: 'https://www.npmjs.com/package/ccremote' },
 		],
 
@@ -79,7 +79,7 @@ export default withMermaid(defineConfig({
 		},
 
 		editLink: {
-			pattern: 'https://github.com/generative-reality/ccremote/edit/main/docs/:path',
+			pattern: 'https://github.com/augmentedmind/ccremote/edit/main/docs/:path',
 			text: 'Edit this page on GitHub',
 		},
 

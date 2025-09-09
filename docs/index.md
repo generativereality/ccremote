@@ -14,7 +14,7 @@ hero:
       link: /guide/
     - theme: alt
       text: View on GitHub
-      link: https://github.com/generative-reality/ccremote
+      link: https://github.com/augmentedmind/ccremote
 
 features:
   - icon: 🔄
