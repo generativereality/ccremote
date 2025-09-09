@@ -2,7 +2,6 @@ import { defineConfig } from 'vitepress';
 import { groupIconMdPlugin, groupIconVitePlugin } from 'vitepress-plugin-group-icons';
 import llmstxt from 'vitepress-plugin-llms';
 import { withMermaid } from 'vitepress-plugin-mermaid';
-import { cloudflareRedirect } from '@ryoppippi/vite-plugin-cloudflare-redirect';
 
 export default withMermaid(defineConfig({
 	title: 'ccremote',
@@ -100,13 +99,6 @@ export default withMermaid(defineConfig({
 
 	vite: {
 		plugins: [
-			cloudflareRedirect({
-				mode: "generate",
-				entries: [
-					{ from: '/gh', to: 'https://github.com/generative-reality/ccremote', status: 302 },
-					{ from: '/npm', to: 'https://www.npmjs.com/package/ccremote', status: 302 },
-				]
-			}),
 			groupIconVitePlugin(),
 			...llmstxt(),
 		],
