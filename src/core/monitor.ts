@@ -28,6 +28,8 @@ export class Monitor extends EventEmitter {
 		limitDetectedAt?: Date;
 		awaitingContinuation: boolean;
 		retryCount: number;
+		lastContinuationTime?: Date;
+		scheduledResetTime?: Date;
 	}>();
 
 	// Pattern matching for Claude Code messages
@@ -75,6 +77,8 @@ export class Monitor extends EventEmitter {
 			lastOutput: '',
 			awaitingContinuation: false,
 			retryCount: 0,
+			lastContinuationTime: undefined,
+			scheduledResetTime: undefined,
 		});
 
 		// Start polling
@@ -111,6 +115,18 @@ export class Monitor extends EventEmitter {
 				await sessionLogger.info(`Tmux session ${session.tmuxSession} no longer exists`);
 				await this.handleSessionEnded(sessionId);
 				return;
+			}
+
+			// Check for scheduled continuation first
+			const sessionState = this.sessionStates.get(sessionId);
+			if (sessionState?.scheduledResetTime) {
+				const now = new Date();
+				if (now >= sessionState.scheduledResetTime) {
+					await sessionLogger.info(`Scheduled reset time arrived, executing continuation for session ${sessionId}`);
+					sessionState.scheduledResetTime = undefined;
+					await this.performAutoContinuation(sessionId);
+					return; // Continue normal monitoring on next poll
+				}
 			}
 
 			// Get current output
@@ -162,8 +178,20 @@ export class Monitor extends EventEmitter {
 			return;
 		}
 
-		// Check for usage limit
+		// Check for usage limit with cooldown protection
 		if (this.patterns.usageLimit.test(output) && !sessionState.awaitingContinuation) {
+			// Check cooldown period to prevent continuous continuation loops (5 minutes)
+			const CONTINUATION_COOLDOWN_MS = 5 * 60 * 1000;
+			const timeSinceLastContinuation = sessionState.lastContinuationTime
+				? Date.now() - sessionState.lastContinuationTime.getTime()
+				: CONTINUATION_COOLDOWN_MS + 1; // Allow if never continued
+
+			if (timeSinceLastContinuation < CONTINUATION_COOLDOWN_MS) {
+				const remainingCooldown = Math.round((CONTINUATION_COOLDOWN_MS - timeSinceLastContinuation) / 1000);
+				await sessionLogger.info(`Usage limit detected but in cooldown period (${remainingCooldown}s remaining), skipping`);
+				return;
+			}
+
 			await sessionLogger.info(`Usage limit detected for session ${sessionId}`);
 			sessionState.limitDetectedAt = new Date();
 			sessionState.awaitingContinuation = true;
@@ -185,6 +213,17 @@ export class Monitor extends EventEmitter {
 	}
 
 	private async handleLimitDetected(sessionId: string, output: string): Promise<void> {
+		const sessionState = this.sessionStates.get(sessionId);
+		if (!sessionState) {
+			return;
+		}
+
+		// Check if already scheduled to prevent duplicate notifications
+		if (sessionState.scheduledResetTime) {
+			await sessionLogger.info(`Already scheduled continuation for ${sessionState.scheduledResetTime.toLocaleString()}, skipping duplicate detection`);
+			return;
+		}
+
 		const event: MonitorEvent = {
 			type: 'limit_detected',
 			sessionId,
@@ -194,20 +233,51 @@ export class Monitor extends EventEmitter {
 
 		this.emit('limit_detected', event);
 
-		// Send Discord notification
-		await this.discordBot.sendNotification(sessionId, {
-			type: 'limit',
-			sessionId,
-			sessionName: (await this.sessionManager.getSession(sessionId))?.name || sessionId,
-			message: 'Usage limit reached. Will automatically continue when limit resets.',
-			metadata: {
-				resetTime: this.calculateResetTime(),
-				detectedAt: new Date().toISOString(),
-			},
-		});
+		// Try to continue immediately first (similar to POC logic)
+		const continueResult = await this.tryImmediateContinuation(sessionId, output);
 
-		// Update session status
-		await this.sessionManager.updateSession(sessionId, { status: 'waiting' });
+		if (continueResult.success) {
+			// Continuation succeeded immediately - limit has already reset
+			await sessionLogger.info(`Immediate continuation successful for session ${sessionId}`);
+			sessionState.lastContinuationTime = new Date();
+			sessionState.awaitingContinuation = false;
+
+			// Send success notification
+			await this.discordBot.sendNotification(sessionId, {
+				type: 'continued',
+				sessionId,
+				sessionName: (await this.sessionManager.getSession(sessionId))?.name || sessionId,
+				message: 'Session automatically continued after limit reset.',
+			});
+
+			await this.sessionManager.updateSession(sessionId, { status: 'active' });
+		}
+		else {
+			// Continuation failed - schedule for later
+			const resetTime = this.extractResetTime(continueResult.response || output);
+			if (resetTime) {
+				const resetDateTime = await this.parseResetTime(resetTime);
+				if (resetDateTime) {
+					sessionState.scheduledResetTime = resetDateTime;
+					await sessionLogger.info(`Scheduled continuation for ${resetDateTime.toLocaleString()}`);
+				}
+			}
+
+			// Send Discord notification (only once)
+			await this.discordBot.sendNotification(sessionId, {
+				type: 'limit',
+				sessionId,
+				sessionName: (await this.sessionManager.getSession(sessionId))?.name || sessionId,
+				message: 'Usage limit reached. Will automatically continue when limit resets.',
+				metadata: {
+					resetTime: resetTime || 'Monitoring for availability',
+					detectedAt: new Date().toISOString(),
+				},
+			});
+
+			// Update session status
+			await this.sessionManager.updateSession(sessionId, { status: 'waiting' });
+		}
 	}
 
 	private async handleContinuationReady(sessionId: string, output: string): Promise<void> {
@@ -216,9 +286,11 @@ export class Monitor extends EventEmitter {
 			return;
 		}
 
-		// Reset state
+		// Reset state and set cooldown timestamp
 		sessionState.awaitingContinuation = false;
 		sessionState.retryCount = 0;
+		sessionState.lastContinuationTime = new Date();
+		sessionState.scheduledResetTime = undefined;
 
 		const event: MonitorEvent = {
 			type: 'continuation_ready',
@@ -420,10 +492,20 @@ export class Monitor extends EventEmitter {
 				return;
 			}
 
+			const sessionState = this.sessionStates.get(sessionId);
+			if (!sessionState) {
+			return;
+		}
+
 			await sessionLogger.info(`Performing auto-continuation for session ${sessionId}`);
 
 			// Use the proper continuation command
 			await this.tmuxManager.sendContinueCommand(session.tmuxSession);
+
+			// Update state
+			sessionState.lastContinuationTime = new Date();
+			sessionState.awaitingContinuation = false;
+			sessionState.scheduledResetTime = undefined;
 
 			// Update session status
 			await this.sessionManager.updateSession(sessionId, { status: 'active' });
@@ -443,14 +525,117 @@ export class Monitor extends EventEmitter {
 		}
 	}
 
-	private calculateResetTime(): string {
-		// Claude Code limits typically reset every 5 hours
-		// This is a rough estimation - in practice you'd want more sophisticated logic
-		const now = new Date();
-		const nextReset = new Date(now);
-		nextReset.setHours(nextReset.getHours() + 5);
-		return nextReset.toLocaleString();
+	/**
+	 * Try to continue immediately - similar to POC logic
+	 */
+	private async tryImmediateContinuation(sessionId: string, _output: string): Promise<{ success: boolean; response?: string }> {
+		try {
+			const session = await this.sessionManager.getSession(sessionId);
+			if (!session) {
+				return { success: false };
+			}
+
+			await sessionLogger.info(`Trying immediate continuation for session ${sessionId}`);
+
+			// Send continue command
+			await this.tmuxManager.sendContinueCommand(session.tmuxSession);
+
+			// Wait for response
+			await new Promise(resolve => setTimeout(resolve, 3000));
+			const responseOutput = await this.tmuxManager.capturePane(session.tmuxSession);
+
+			// Check if the same limit message still appears
+			const stillHasLimitMessage = this.patterns.usageLimit.test(responseOutput);
+
+			if (stillHasLimitMessage) {
+				await sessionLogger.info('Immediate continuation failed - limit message still present');
+				return { success: false, response: responseOutput };
+			}
+			else {
+				await sessionLogger.info('Immediate continuation successful - no limit message in response');
+				return { success: true, response: responseOutput };
+			}
+		}
+		catch (error) {
+			await sessionLogger.error(`Immediate continuation attempt failed: ${error}`);
+			return { success: false };
+		}
 	}
+
+	/**
+	 * Extract reset time from limit message
+	 */
+	private extractResetTime(output: string): string | null {
+		const timePatterns = [
+			/resets (\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i,
+			/available again at (\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i,
+			/ready at (\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i,
+		];
+
+		for (const pattern of timePatterns) {
+			const match = output.match(pattern);
+			if (match) {
+				return match[1].trim();
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * Parse reset time string into Date object (from POC)
+	 */
+	private async parseResetTime(timeStr: string): Promise<Date | null> {
+		try {
+			const now = new Date();
+			timeStr = timeStr.toLowerCase().trim();
+
+			// Match patterns like "10pm", "2:30pm", "14:00", etc.
+			const timeMatch = timeStr.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/);
+			if (!timeMatch) {
+				await sessionLogger.warn(`No time match found in: ${timeStr}`);
+				return null;
+			}
+
+			const [, hours, minutes, period] = timeMatch;
+			let numHours = Number.parseInt(hours, 10);
+			const numMinutes = minutes ? Number.parseInt(minutes, 10) : 0;
+
+			// Handle AM/PM conversion
+			if (period) {
+				if (period === 'pm' && numHours !== 12) {
+					numHours += 12;
+				}
+				else if (period === 'am' && numHours === 12) {
+					numHours = 0;
+				}
+			}
+
+			const resetTime = new Date(now);
+			resetTime.setHours(numHours, numMinutes, 0, 0);
+
+			// If the calculated time is before now, add 24 hours (assume tomorrow)
+			if (resetTime <= now) {
+				resetTime.setDate(resetTime.getDate() + 1);
+				await sessionLogger.info(`Reset time passed, scheduling for tomorrow: ${resetTime.toLocaleString()}`);
+			}
+
+			// Sanity check: Claude windows are 5 hours, so reset time shouldn't be more than 5 hours from now
+			const hoursToReset = (resetTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+			if (hoursToReset > 5) {
+				await sessionLogger.warn(`Sanity check failed: Reset time ${hoursToReset.toFixed(1)} hours away exceeds 5-hour window`);
+				return null;
+			}
+
+			await sessionLogger.info(`Parsed "${timeStr}" as ${resetTime.toLocaleString()}`);
+			return resetTime;
+		}
+		catch (error) {
+			await sessionLogger.error(`Failed to parse reset time: ${error} for input: ${timeStr}`);
+			return null;
+		}
+	}
+
 
 	async stopAll(): Promise<void> {
 		const sessionIds = Array.from(this.monitoringIntervals.keys());
