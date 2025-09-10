@@ -78,6 +78,22 @@ export const startCommand = define({
 			const sessionManager = new SessionManager();
 			const tmuxManager = new TmuxManager();
 
+			// Check if tmux is available
+			if (!(await tmuxManager.isTmuxAvailable())) {
+				consola.error('tmux is not installed or not available in PATH');
+				consola.info('');
+				consola.info('💡 ccremote requires tmux to manage Claude Code sessions.');
+				consola.info('');
+				consola.info('📋 Installation instructions:');
+				consola.info('  macOS:   brew install tmux');
+				consola.info('  Ubuntu:  sudo apt install tmux');
+				consola.info('  CentOS:  sudo yum install tmux');
+				consola.info('  Arch:    sudo pacman -S tmux');
+				consola.info('');
+				consola.info('After installing tmux, run this command again.');
+				process.exit(1);
+			}
+
 			await sessionManager.initialize();
 
 			// Create session

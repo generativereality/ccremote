@@ -4,6 +4,17 @@ import { promisify } from 'node:util';
 const execAsync = promisify(exec);
 
 export class TmuxManager {
+	async isTmuxAvailable(): Promise<boolean> {
+		try {
+			const command = 'tmux -V';
+			await execAsync(command);
+			return true;
+		}
+		catch {
+			return false;
+		}
+	}
+
 	async createSession(sessionName: string): Promise<void> {
 		try {
 			// Create new tmux session with mouse mode enabled
