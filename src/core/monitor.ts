@@ -2,7 +2,7 @@ import type { DiscordBot } from './discord.js';
 import type { SessionManager } from './session.js';
 import type { TmuxManager } from './tmux.js';
 import { EventEmitter } from 'node:events';
-import { sessionLogger } from './logger.js';
+import { logger } from './logger.js';
 
 export type MonitoringOptions = {
 	pollInterval?: number; // milliseconds, default 2000
@@ -87,7 +87,7 @@ export class Monitor extends EventEmitter {
 		}, this.options.pollInterval);
 
 		this.monitoringIntervals.set(sessionId, interval);
-		await sessionLogger.info(`Started monitoring session: ${sessionId}`);
+		await logger.info(`Started monitoring session: ${sessionId}`);
 	}
 
 	async stopMonitoring(sessionId: string): Promise<void> {
@@ -97,14 +97,14 @@ export class Monitor extends EventEmitter {
 			this.monitoringIntervals.delete(sessionId);
 		}
 		this.sessionStates.delete(sessionId);
-		await sessionLogger.info(`Stopped monitoring session: ${sessionId}`);
+		await logger.info(`Stopped monitoring session: ${sessionId}`);
 	}
 
 	private async pollSession(sessionId: string): Promise<void> {
 		try {
 			const session = await this.sessionManager.getSession(sessionId);
 			if (!session) {
-				await sessionLogger.warn(`Session ${sessionId} not found, stopping monitoring`);
+				await logger.warn(`Session ${sessionId} not found, stopping monitoring`);
 				await this.stopMonitoring(sessionId);
 				return;
 			}
@@ -112,7 +112,7 @@ export class Monitor extends EventEmitter {
 			// Check if tmux session still exists
 			const tmuxExists = await this.tmuxManager.sessionExists(session.tmuxSession);
 			if (!tmuxExists) {
-				await sessionLogger.info(`Tmux session ${session.tmuxSession} no longer exists`);
+				await logger.info(`Tmux session ${session.tmuxSession} no longer exists`);
 				await this.handleSessionEnded(sessionId);
 				return;
 			}
@@ -122,7 +122,7 @@ export class Monitor extends EventEmitter {
 			if (sessionState?.scheduledResetTime) {
 				const now = new Date();
 				if (now >= sessionState.scheduledResetTime) {
-					await sessionLogger.info(`Scheduled reset time arrived, executing continuation for session ${sessionId}`);
+					await logger.info(`Scheduled reset time arrived, executing continuation for session ${sessionId}`);
 					sessionState.scheduledResetTime = undefined;
 					await this.performAutoContinuation(sessionId);
 					return; // Continue normal monitoring on next poll
@@ -134,7 +134,7 @@ export class Monitor extends EventEmitter {
 			await this.analyzeOutput(sessionId, currentOutput);
 		}
 		catch (error) {
-			await sessionLogger.error(`Error polling session ${sessionId}: ${error}`);
+			await logger.error(`Error polling session ${sessionId}: ${error}`);
 			await this.handlePollingError(sessionId, error);
 		}
 	}
@@ -188,11 +188,11 @@ export class Monitor extends EventEmitter {
 
 			if (timeSinceLastContinuation < CONTINUATION_COOLDOWN_MS) {
 				const remainingCooldown = Math.round((CONTINUATION_COOLDOWN_MS - timeSinceLastContinuation) / 1000);
-				await sessionLogger.info(`Usage limit detected but in cooldown period (${remainingCooldown}s remaining), skipping`);
+				await logger.info(`Usage limit detected but in cooldown period (${remainingCooldown}s remaining), skipping`);
 				return;
 			}
 
-			await sessionLogger.info(`Usage limit detected for session ${sessionId}`);
+			await logger.info(`Usage limit detected for session ${sessionId}`);
 			sessionState.limitDetectedAt = new Date();
 			sessionState.awaitingContinuation = true;
 
@@ -201,13 +201,13 @@ export class Monitor extends EventEmitter {
 
 		// Check for continuation readiness (after limit was detected)
 		if (sessionState.awaitingContinuation && this.patterns.continuationReady.test(output)) {
-			await sessionLogger.info(`Continuation ready detected for session ${sessionId}`);
+			await logger.info(`Continuation ready detected for session ${sessionId}`);
 			await this.handleContinuationReady(sessionId, output);
 		}
 
 		// Check for Claude Code approval dialogs
 		if (this.detectApprovalDialog(output)) {
-			await sessionLogger.info(`Approval dialog detected for session ${sessionId}`);
+			await logger.info(`Approval dialog detected for session ${sessionId}`);
 			await this.handleApprovalRequest(sessionId, output);
 		}
 	}
@@ -220,7 +220,7 @@ export class Monitor extends EventEmitter {
 
 		// Check if already scheduled to prevent duplicate notifications
 		if (sessionState.scheduledResetTime) {
-			await sessionLogger.info(`Already scheduled continuation for ${sessionState.scheduledResetTime.toLocaleString()}, skipping duplicate detection`);
+			await logger.info(`Already scheduled continuation for ${sessionState.scheduledResetTime.toLocaleString()}, skipping duplicate detection`);
 			return;
 		}
 
@@ -238,7 +238,7 @@ export class Monitor extends EventEmitter {
 
 		if (continueResult.success) {
 			// Continuation succeeded immediately - limit has already reset
-			await sessionLogger.info(`Immediate continuation successful for session ${sessionId}`);
+			await logger.info(`Immediate continuation successful for session ${sessionId}`);
 			sessionState.lastContinuationTime = new Date();
 			sessionState.awaitingContinuation = false;
 
@@ -259,7 +259,7 @@ export class Monitor extends EventEmitter {
 				const resetDateTime = await this.parseResetTime(resetTime);
 				if (resetDateTime) {
 					sessionState.scheduledResetTime = resetDateTime;
-					await sessionLogger.info(`Scheduled continuation for ${resetDateTime.toLocaleString()}`);
+					await logger.info(`Scheduled continuation for ${resetDateTime.toLocaleString()}`);
 				}
 			}
 
@@ -413,7 +413,7 @@ export class Monitor extends EventEmitter {
 		// Prevent duplicate notifications for the same approval
 		const approvalKey = approvalInfo.question;
 		if ((sessionState as any).lastApprovalQuestion === approvalKey) {
-			await sessionLogger.info('Skipping duplicate approval request');
+			await logger.info('Skipping duplicate approval request');
 			return;
 		}
 		(sessionState as any).lastApprovalQuestion = approvalKey;
@@ -468,7 +468,7 @@ export class Monitor extends EventEmitter {
 		sessionState.retryCount++;
 
 		if (sessionState.retryCount >= this.options.maxRetries) {
-			await sessionLogger.error(`Max retries exceeded for session ${sessionId}, stopping monitoring`);
+			await logger.error(`Max retries exceeded for session ${sessionId}, stopping monitoring`);
 			await this.stopMonitoring(sessionId);
 
 			const event: MonitorEvent = {
@@ -481,7 +481,7 @@ export class Monitor extends EventEmitter {
 			this.emit('error', event);
 		}
 		else {
-			await sessionLogger.warn(`Polling error for session ${sessionId}, retry ${sessionState.retryCount}/${this.options.maxRetries}`);
+			await logger.warn(`Polling error for session ${sessionId}, retry ${sessionState.retryCount}/${this.options.maxRetries}`);
 		}
 	}
 
@@ -497,7 +497,7 @@ export class Monitor extends EventEmitter {
 				return;
 			}
 
-			await sessionLogger.info(`Performing auto-continuation for session ${sessionId}`);
+			await logger.info(`Performing auto-continuation for session ${sessionId}`);
 
 			// Use the proper continuation command
 			await this.tmuxManager.sendContinueCommand(session.tmuxSession);
@@ -518,10 +518,10 @@ export class Monitor extends EventEmitter {
 				message: 'Session automatically continued after limit reset.',
 			});
 
-			await sessionLogger.info(`Auto-continuation completed for session ${sessionId}`);
+			await logger.info(`Auto-continuation completed for session ${sessionId}`);
 		}
 		catch (error) {
-			await sessionLogger.error(`Auto-continuation failed for session ${sessionId}: ${error}`);
+			await logger.error(`Auto-continuation failed for session ${sessionId}: ${error}`);
 		}
 	}
 
@@ -535,7 +535,7 @@ export class Monitor extends EventEmitter {
 				return { success: false };
 			}
 
-			await sessionLogger.info(`Trying immediate continuation for session ${sessionId}`);
+			await logger.info(`Trying immediate continuation for session ${sessionId}`);
 
 			// Send continue command
 			await this.tmuxManager.sendContinueCommand(session.tmuxSession);
@@ -548,16 +548,16 @@ export class Monitor extends EventEmitter {
 			const stillHasLimitMessage = this.patterns.usageLimit.test(responseOutput);
 
 			if (stillHasLimitMessage) {
-				await sessionLogger.info('Immediate continuation failed - limit message still present');
+				await logger.info('Immediate continuation failed - limit message still present');
 				return { success: false, response: responseOutput };
 			}
 			else {
-				await sessionLogger.info('Immediate continuation successful - no limit message in response');
+				await logger.info('Immediate continuation successful - no limit message in response');
 				return { success: true, response: responseOutput };
 			}
 		}
 		catch (error) {
-			await sessionLogger.error(`Immediate continuation attempt failed: ${error}`);
+			await logger.error(`Immediate continuation attempt failed: ${error}`);
 			return { success: false };
 		}
 	}
@@ -593,7 +593,7 @@ export class Monitor extends EventEmitter {
 			// Match patterns like "10pm", "2:30pm", "14:00", etc.
 			const timeMatch = timeStr.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/);
 			if (!timeMatch) {
-				await sessionLogger.warn(`No time match found in: ${timeStr}`);
+				await logger.warn(`No time match found in: ${timeStr}`);
 				return null;
 			}
 
@@ -617,21 +617,21 @@ export class Monitor extends EventEmitter {
 			// If the calculated time is before now, add 24 hours (assume tomorrow)
 			if (resetTime <= now) {
 				resetTime.setDate(resetTime.getDate() + 1);
-				await sessionLogger.info(`Reset time passed, scheduling for tomorrow: ${resetTime.toLocaleString()}`);
+				await logger.info(`Reset time passed, scheduling for tomorrow: ${resetTime.toLocaleString()}`);
 			}
 
 			// Sanity check: Claude windows are 5 hours, so reset time shouldn't be more than 5 hours from now
 			const hoursToReset = (resetTime.getTime() - now.getTime()) / (1000 * 60 * 60);
 			if (hoursToReset > 5) {
-				await sessionLogger.warn(`Sanity check failed: Reset time ${hoursToReset.toFixed(1)} hours away exceeds 5-hour window`);
+				await logger.warn(`Sanity check failed: Reset time ${hoursToReset.toFixed(1)} hours away exceeds 5-hour window`);
 				return null;
 			}
 
-			await sessionLogger.info(`Parsed "${timeStr}" as ${resetTime.toLocaleString()}`);
+			await logger.info(`Parsed "${timeStr}" as ${resetTime.toLocaleString()}`);
 			return resetTime;
 		}
 		catch (error) {
-			await sessionLogger.error(`Failed to parse reset time: ${error} for input: ${timeStr}`);
+			await logger.error(`Failed to parse reset time: ${error} for input: ${timeStr}`);
 			return null;
 		}
 	}

@@ -1,9 +1,8 @@
+import type { DaemonConfig } from '../core/daemon.js';
 import { consola } from 'consola';
 import { define } from 'gunshi';
 import { loadConfig, validateConfig } from '../core/config.js';
-import { DiscordBot } from '../core/discord.js';
-import { setSessionLogFile, setSilentMode } from '../core/logger.js';
-import { Monitor } from '../core/monitor.js';
+import { daemonManager } from '../core/daemon-manager.js';
 import { SessionManager } from '../core/session.js';
 import { TmuxManager } from '../core/tmux.js';
 
@@ -46,15 +45,9 @@ export const startCommand = define({
 		}
 
 		try {
-		// Initialize managers
+			// Initialize managers (only what we need for setup)
 			const sessionManager = new SessionManager();
 			const tmuxManager = new TmuxManager();
-			const discordBot = new DiscordBot();
-			const monitor = new Monitor(sessionManager, tmuxManager, discordBot, {
-				pollInterval: config.monitoringInterval,
-				maxRetries: config.maxRetries,
-				autoRestart: config.autoRestart,
-			});
 
 			await sessionManager.initialize();
 
@@ -73,21 +66,24 @@ export const startCommand = define({
 			consola.info('Creating tmux session and starting Claude Code...');
 			await tmuxManager.createSession(session.tmuxSession);
 
-			// Start Discord bot
-			consola.info('Starting Discord bot...');
-			await discordBot.start(config.discordBotToken, config.discordOwnerId, config.discordAuthorizedUsers);
+			// Prepare daemon configuration
+			const daemonConfig: DaemonConfig = {
+				sessionId: session.id,
+				logFile,
+				discordBotToken: config.discordBotToken,
+				discordOwnerId: config.discordOwnerId,
+				discordAuthorizedUsers: config.discordAuthorizedUsers,
+				discordChannelId: channel,
+				monitoringOptions: {
+					pollInterval: config.monitoringInterval,
+					maxRetries: config.maxRetries,
+					autoRestart: config.autoRestart,
+				},
+			};
 
-			// Set up Discord channel
-			let channelId = channel;
-			if (!channelId) {
-				channelId = await discordBot.createOrGetChannel(session.id, session.name);
-			}
-			else {
-				await discordBot.assignChannelToSession(session.id, channelId);
-			}
-
-			// Update session with channel
-			await sessionManager.updateSession(session.id, { channelId });
+			// Spawn daemon process
+			consola.info('Starting background daemon...');
+			const daemon = await daemonManager.spawnDaemon(daemonConfig);
 
 			consola.success('Session started successfully!');
 			consola.info('');
@@ -95,105 +91,47 @@ export const startCommand = define({
 			consola.info(`  Name: ${session.name}`);
 			consola.info(`  ID: ${session.id}`);
 			consola.info(`  Tmux: ${session.tmuxSession}`);
-			consola.info(`  Discord Channel: ${channelId}`);
+			consola.info(`  Daemon PID: ${daemon.pid}`);
 			consola.info('');
 			consola.info('💡 Usage:');
-			consola.info('  • Use Claude Code normally - ccremote will monitor for limits and approvals');
+			consola.info('  • Use Claude Code normally - daemon will monitor for limits and approvals');
 			consola.info('  • Check Discord for notifications and approval requests');
 			consola.info(`  • Stop session when done: ccremote stop --session ${session.id}`);
 			consola.info('');
-			consola.info('Note: Monitoring continues in the background!');
 
-			// Create log file for monitoring output
-			const fs = await import('node:fs/promises');
-			await fs.writeFile(logFile, `ccremote session ${session.id} started at ${new Date().toISOString()}\n`);
-
-			// Configure session-specific file logging
-			setSessionLogFile(logFile);
-
-			// Set up monitoring event handlers (write to log instead of console after attach)
-			let attachedToTmux = false;
-
-			monitor.on('limit_detected', (event) => {
-				const message = `🚫 Usage limit detected for ${event.sessionId}`;
-				if (attachedToTmux) {
-					void fs.appendFile(logFile, `${new Date().toISOString()} ${message}\n`);
-				}
-				else {
-					consola.warn(message);
-				}
-			});
-
-			monitor.on('continuation_ready', (event) => {
-				const message = `✅ Auto-continuing session ${event.sessionId}`;
-				if (attachedToTmux) {
-					void fs.appendFile(logFile, `${new Date().toISOString()} ${message}\n`);
-				}
-				else {
-					consola.info(message);
-				}
-			});
-
-			monitor.on('error', (event) => {
-				const message = `❌ Monitor error for ${event.sessionId}: ${event.data?.error}`;
-				if (attachedToTmux) {
-					void fs.appendFile(logFile, `${new Date().toISOString()} ${message}\n`);
-				}
-				else {
-					consola.error(message);
-				}
-			});
-
-			// Start monitoring in the background
-			void monitor.startMonitoring(session.id);
-
+			// Set up graceful shutdown
 			process.on('SIGINT', () => {
 				consola.info('\nShutting down...');
-				void monitor.stopAll();
-				void discordBot.stop();
-				process.exit(0);
+				void (async () => {
+					await daemonManager.stopDaemon(session.id);
+					process.exit(0);
+				})();
 			});
 
 			// Give user a moment to read the info, then attach
-			consola.info('');
 			consola.info('🔄 Attaching to Claude Code session in 3 seconds...');
-			consola.info('   (Press Ctrl+B then D to detach and return to monitoring)');
-			consola.info(`   Monitoring logs: ${logFile}`);
+			consola.info('   (Press Ctrl+B then D to detach - daemon continues in background)');
+			consola.info(`   View daemon logs: tail -f ${logFile}`);
 
 			await new Promise(resolve => setTimeout(resolve, 3000));
 
-			// Set flag to redirect output to logs
-			attachedToTmux = true;
-
-			// Enable silent mode to redirect all daemon logging to file
-			setSilentMode(true);
-
-			// Attach to the tmux session
+			// Attach to the tmux session (clean process with no daemon interference)
 			const { spawn } = await import('node:child_process');
-
-			// Use spawn to attach interactively
 			const attachProcess = spawn('tmux', ['attach-session', '-t', session.tmuxSession], {
 				stdio: 'inherit',
 			});
 
-			attachProcess.on('exit', async (code) => {
-				attachedToTmux = false; // Resume console output when detached
-
-				// Disable silent mode to resume console logging
-				setSilentMode(false);
-
+			attachProcess.on('exit', (code) => {
 				if (code === 0) {
 					consola.info('');
 					consola.info('👋 Detached from tmux session');
-					consola.info(`   Session ${session.id} is still running and being monitored`);
+					consola.info(`   Session ${session.id} daemon continues running (PID: ${daemon.pid})`);
 					consola.info(`   Reattach anytime with: tmux attach -t ${session.tmuxSession}`);
 					consola.info(`   Stop session with: ccremote stop --session ${session.id}`);
 					consola.info(`   View logs: tail -f ${logFile}`);
 					consola.info('');
-					consola.info('🔄 Monitoring continues...');
-
-					// Keep process alive for monitoring
-					return new Promise<void>(() => {}); // Wait forever
+					consola.success('Session detached successfully - daemon monitoring continues!');
+					process.exit(0);
 				}
 				else {
 					consola.error('Failed to attach to tmux session');

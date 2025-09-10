@@ -1,5 +1,6 @@
 import { consola } from 'consola';
 import { define } from 'gunshi';
+import { daemonManager } from '../core/daemon-manager.js';
 import { SessionManager } from '../core/session.js';
 import { TmuxManager } from '../core/tmux.js';
 
@@ -39,17 +40,36 @@ export const stopCommand = define({
 
 			consola.start(`Stopping session: ${session.name} (${session.id})`);
 
+			// Load daemon manager
+			await daemonManager.loadDaemonPids();
+
+			// Check if daemon is running
+			const daemon = daemonManager.getDaemon(session.id);
+			const daemonRunning = daemon && daemonManager.isDaemonRunning(session.id);
+
 			// Check if tmux session is still running
 			const tmuxActive = await tmuxManager.sessionExists(session.tmuxSession);
 
-			if (tmuxActive) {
-				if (!force) {
-					consola.warn('Tmux session is still active');
-					consola.warn('   This will kill the tmux session and any running Claude Code instance');
-					consola.warn('   Use --force to proceed or stop the session manually first');
-					process.exit(1);
-				}
+			if ((tmuxActive || daemonRunning) && !force) {
+				consola.warn('Session is still active:');
+				if (tmuxActive) { consola.warn('   • Tmux session is running'); }
+				if (daemonRunning) { consola.warn('   • Daemon process is running'); }
+				consola.warn('   This will kill all components and any running Claude Code instance');
+				consola.warn('   Use --force to proceed or stop the session manually first');
+				process.exit(1);
+			}
 
+			// Stop daemon first
+			if (daemonRunning) {
+				consola.info(`Stopping daemon process (PID: ${daemon.pid})...`);
+				const daemonStopped = await daemonManager.stopDaemon(session.id);
+				if (!daemonStopped) {
+					consola.warn('Daemon was not running or already stopped');
+				}
+			}
+
+			// Kill tmux session if running
+			if (tmuxActive) {
 				consola.info('Killing tmux session...');
 				await tmuxManager.killSession(session.tmuxSession);
 			}
@@ -63,6 +83,9 @@ export const stopCommand = define({
 			consola.info(`  Name: ${session.name}`);
 			consola.info(`  ID: ${session.id}`);
 			consola.info(`  Tmux session: ${session.tmuxSession} ${tmuxActive ? '(killed)' : '(already dead)'}`);
+			if (daemon) {
+				consola.info(`  Daemon: PID ${daemon.pid} ${daemonRunning ? '(stopped)' : '(already dead)'}`);
+			}
 		}
 		catch (error) {
 			consola.error('Failed to stop session:', error instanceof Error ? error.message : error);
