@@ -63,8 +63,8 @@ export const startCommand = define({
 			// After successful init, confirm Discord bot setup
 			consola.info('');
 			consola.info('⚠️  Important: Before continuing, make sure you have:');
-			consola.info('   1. ✅ Created your Discord bot and copied the token');
-			consola.info('   2. ✅ Invited the bot to your Discord server with proper permissions');
+			consola.info('   1. ✅ Created your Discord bot with MESSAGE CONTENT INTENT enabled');
+			consola.info('   2. ✅ Invited the bot to your Discord server with Send Messages permission');
 			consola.info('   3. ✅ The bot appears online in your server member list');
 			consola.info('');
 			

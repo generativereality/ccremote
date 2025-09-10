@@ -63,6 +63,7 @@ ccremote is a CLI tool that provides remote control for Claude Code sessions wit
 - Notification types: `limit`, `continued`, `approval`, `error`
 - Per-user bots recommended for privacy
 - Approval workflow: detect → notify → wait for user response
+- **Permissions Policy**: Only request Discord permissions that are actually used in code (src/core/discord.ts). When adding new features requiring additional permissions, update both the code AND the documentation/init instructions to match.
 
 ## Configuration
 

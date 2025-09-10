@@ -37,7 +37,8 @@ This will guide you through the entire process step-by-step. If you prefer manua
 1. In your application, go to the "Bot" section in the left sidebar
 2. Click "Add Bot" 
 3. Click "Yes, do it!" to confirm
-4. **Important**: Under "Privileged Gateway Intents", you don't need to enable any special intents for basic functionality
+4. **Important**: Under "Privileged Gateway Intents", enable this intent:
+   - ✅ **MESSAGE CONTENT INTENT** - Required for bot to read approval commands like "approve" and "deny"
 
 ### Step 3: Get Bot Token
 
@@ -65,7 +66,8 @@ The bot needs to be "invited" to Discord to send you messages:
 1. **Generate Invite URL**:
    - In the Developer Portal, go to "OAuth2" → "URL Generator"
    - Select scopes: `bot`
-   - Select bot permissions: `Send Messages` and `Use Slash Commands` (optional)
+   - Select this bot permission:
+     • `Send Messages`
    - Copy the generated URL
 
 2. **Invite Bot**:
@@ -89,22 +91,17 @@ Before using ccremote, test that your bot can reach you:
    ```
 3. You should receive a test message from your bot
 
-## Bot Permissions Explained
+## Required Bot Permissions
 
-ccremote bots need minimal permissions:
+ccremote bots need these specific permissions and intents to operate:
 
-### Required Permissions
-- **Send Messages**: To send you notifications about sessions
-- **Use External Emojis**: For status indicators in messages (optional but recommended)
+### Gateway Intents (in Bot section)
+- **MESSAGE CONTENT INTENT**: Required for bot to read approval commands like "approve" and "deny" (used in discord.ts:60)
 
-### Optional Permissions  
-- **Use Slash Commands**: If you want to add interactive bot commands later
-- **Embed Links**: For richer notification formatting
+### Bot Permissions (when inviting)
+- **Send Messages**: Required to send notifications and replies (used in discord.ts:111, 156, 71, 75, 83, 178)
 
-### Not Required
-- **Administrator**: Never give bots admin permissions
-- **Manage Messages**: ccremote doesn't delete or edit messages
-- **Read Message History**: Not needed for notifications
+**Important**: Only these permissions are required - ccremote doesn't use any other Discord features.
 
 ## Privacy Models
 

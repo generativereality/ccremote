@@ -59,9 +59,8 @@ export const initCommand = define({
 		consola.info('2. Click "New Application" and give it a name');
 		consola.info('3. Go to the "Bot" section in the sidebar');
 		consola.info('4. Click "Add Bot" if not already created');
-		consola.info('5. Enable required Privileged Gateway Intents:');
-		consola.info('   - ✅ MESSAGE CONTENT INTENT');
-		consola.info('   - ✅ SERVER MEMBERS INTENT (optional but recommended)');
+		consola.info('5. Enable this Privileged Gateway Intent:');
+		consola.info('   - ✅ MESSAGE CONTENT INTENT (for approval commands)');
 		consola.info('6. Copy the "Token" - this is your CCREMOTE_DISCORD_BOT_TOKEN');
 		consola.info('7. For your Discord User ID:');
 		consola.info('   - Open the Discord app (not the developer portal)');
@@ -156,8 +155,8 @@ CCREMOTE_AUTO_RESTART=true           # Auto-restart monitoring on failure (defau
 			consola.info('   - You can create a new server just for ccremote (+ button in Discord > Create My Own)');
 			consola.info('   - Or use an existing server where you have admin permissions');
 			consola.info('   - To invite your bot: go back to Developer Portal > OAuth2 > URL Generator');
-			consola.info('   - Select "bot" scope and these permissions:');
-			consola.info('     • Send Messages • View Channels • Read Message History');
+			consola.info('   - Select "bot" scope and this permission:');
+			consola.info('     • Send Messages');
 			consola.info('   - Visit the generated URL to invite your bot');
 			consola.info('2. Run: ccremote start');
 		}
