@@ -29,7 +29,7 @@ export class DaemonManager {
 	 * Spawn a new daemon process for a session using PM2
 	 */
 	async spawnDaemon(config: DaemonConfig): Promise<DaemonProcess> {
-		const pm2Name = `ccremote-daemon-${config.sessionId}`;
+		const pm2Name = `${config.sessionId}-daemon`;
 		
 		// Find daemon script - either in development or installed package
 		let daemonScript: string;
@@ -107,7 +107,6 @@ export class DaemonManager {
 					// We'll use a placeholder PID and rely on PM2 for process tracking
 					const daemon: DaemonProcess = {
 						sessionId: config.sessionId,
-						pid: 0, // PM2 manages the actual PID
 						pm2Id: pm2Name,
 						logFile: config.logFile,
 						startTime: new Date(),
@@ -225,40 +224,28 @@ export class DaemonManager {
 	async loadDaemonPids(): Promise<void> {
 		try {
 			const data = await fs.readFile(this.daemonPidsFile, 'utf-8');
-			const pids: Array<{ sessionId: string; pid: number; pm2Id?: string; logFile: string; startTime: string }> = JSON.parse(data);
+			const pids: Array<{ sessionId: string; pm2Id?: string; logFile: string; startTime: string }> = JSON.parse(data);
 
 			for (const pidInfo of pids) {
+				if (!pidInfo.pm2Id) continue; // Skip invalid entries
+				
 				try {
-					// For PM2 processes, check via PM2 instead of direct PID
-					if (pidInfo.pm2Id) {
-						// Check if PM2 process exists
-						const checkProcess = spawn('npx', ['pm2', 'describe', pidInfo.pm2Id], {
-							stdio: ['ignore', 'pipe', 'ignore'],
-						});
+					// Check if PM2 process exists
+					const checkProcess = spawn('npx', ['pm2', 'describe', pidInfo.pm2Id], {
+						stdio: ['ignore', 'pipe', 'ignore'],
+					});
 
-						checkProcess.on('close', (code) => {
-							if (code === 0) {
-								// PM2 process exists - recreate daemon entry
-								this.daemons.set(pidInfo.sessionId, {
-									sessionId: pidInfo.sessionId,
-									pid: pidInfo.pid,
-									pm2Id: pidInfo.pm2Id!,
-									logFile: pidInfo.logFile,
-									startTime: new Date(pidInfo.startTime),
-								});
-							}
-						});
-					} else {
-						// Legacy: Check if direct process still exists
-						process.kill(pidInfo.pid, 0);
-						this.daemons.set(pidInfo.sessionId, {
-							sessionId: pidInfo.sessionId,
-							pid: pidInfo.pid,
-							pm2Id: `ccremote-daemon-${pidInfo.sessionId}`, // Assume PM2 name
-							logFile: pidInfo.logFile,
-							startTime: new Date(pidInfo.startTime),
-						});
-					}
+					checkProcess.on('close', (code) => {
+						if (code === 0) {
+							// PM2 process exists - recreate daemon entry
+							this.daemons.set(pidInfo.sessionId, {
+								sessionId: pidInfo.sessionId,
+								pm2Id: pidInfo.pm2Id!,
+								logFile: pidInfo.logFile,
+								startTime: new Date(pidInfo.startTime),
+							});
+						}
+					});
 				}
 				catch {
 					// Process doesn't exist, skip it
@@ -280,7 +267,6 @@ export class DaemonManager {
 
 			const pids = Array.from(this.daemons.values()).map(daemon => ({
 				sessionId: daemon.sessionId,
-				pid: daemon.pid,
 				pm2Id: daemon.pm2Id,
 				logFile: daemon.logFile,
 				startTime: daemon.startTime.toISOString(),
