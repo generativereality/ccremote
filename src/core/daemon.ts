@@ -44,7 +44,15 @@ export class Daemon {
 	private async log(level: 'INFO' | 'WARN' | 'ERROR', message: string): Promise<void> {
 		const timestamp = new Date().toISOString();
 		const logEntry = `${timestamp} [DAEMON:${level}] ${message}\n`;
-		await fs.appendFile(this.logFile, logEntry);
+		
+		// Debug: Also log to console for PM2 to capture
+		console.info(`${timestamp} [DAEMON:${level}] ${message}`);
+		
+		try {
+			await fs.appendFile(this.logFile, logEntry);
+		} catch (error) {
+			console.error(`Failed to write to log file ${this.logFile}:`, error);
+		}
 	}
 
 	/**
@@ -237,35 +245,44 @@ export class Daemon {
  */
 export async function startDaemon(): Promise<void> {
 	try {
-		const configArg = process.argv[2];
-		if (!configArg) {
-			console.info('Usage: daemon <config-json>');
+		const sessionId = process.argv[2];
+		
+		if (!sessionId) {
+			console.info('Usage: daemon <session-id>');
 			process.exit(1);
 		}
 
-		const config: DaemonConfig = JSON.parse(configArg);
+		// Load config from environment like any other ccremote process
+		const { loadConfig } = await import('./config.js');
+		const appConfig = await loadConfig();
+		
+		const config: DaemonConfig = {
+			sessionId,
+			logFile: `.ccremote/session-${sessionId}.log`,
+			discordBotToken: appConfig.discordBotToken,
+			discordOwnerId: appConfig.discordOwnerId,
+			discordAuthorizedUsers: appConfig.discordAuthorizedUsers,
+			monitoringOptions: {
+				pollInterval: appConfig.monitoringInterval,
+				maxRetries: appConfig.maxRetries,
+				autoRestart: appConfig.autoRestart,
+			}
+		};
 		
 		const daemon = new Daemon(config);
 		await daemon.start();
 	}
 	catch (error) {
-		// Try to log to file if we have config, otherwise console
-		const configArg = process.argv[2];
-		if (configArg) {
-			try {
-				const config: DaemonConfig = JSON.parse(configArg);
-				await fs.appendFile(config.logFile, `${new Date().toISOString()} [DAEMON:ERROR] Failed to start daemon: ${error instanceof Error ? error.message : String(error)}\n`);
-			} catch {
-				console.info(`Failed to start daemon: ${error instanceof Error ? error.message : String(error)}`);
-			}
-		} else {
-			console.info(`Failed to start daemon: ${error instanceof Error ? error.message : String(error)}`);
+		const sessionId = process.argv[2];
+		const logFile = sessionId ? `.ccremote/session-${sessionId}.log` : '.ccremote/daemon-error.log';
+		
+		try {
+			await fs.appendFile(logFile, `${new Date().toISOString()} [DAEMON:ERROR] Failed to start daemon: ${error instanceof Error ? error.message : String(error)}\n`);
+		} catch {
+			console.error(`Failed to start daemon: ${error instanceof Error ? error.message : String(error)}`);
 		}
 		process.exit(1);
 	}
 }
 
-// If this module is run directly, start the daemon
-if (import.meta.url === `file://${process.argv[1]}`) {
-	void startDaemon();
-}
+// Entry point is handled by src/daemon.ts - don't duplicate it here

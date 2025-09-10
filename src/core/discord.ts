@@ -101,14 +101,15 @@ export class DiscordBot {
 		}
 
 		try {
-			const channel = await this.client.channels.fetch(channelId) as TextChannel;
-			if (!channel) {
-				console.warn(`Discord channel ${channelId} not found`);
-				return;
-			}
+			await this.withExponentialBackoff(async () => {
+				const channel = await this.client.channels.fetch(channelId) as TextChannel;
+				if (!channel) {
+					throw new Error(`Discord channel ${channelId} not found`);
+				}
 
-			const message = this.formatNotification(notification);
-			await channel.send(message);
+				const message = this.formatNotification(notification);
+				await channel.send(message);
+			}, 'send Discord notification');
 		}
 		catch (error) {
 			console.error('Error sending Discord notification:', error);
@@ -145,21 +146,20 @@ export class DiscordBot {
 		// For now, we'll use DMs with the owner
 		// In the future, this could create private channels or use existing ones
 
-		try {
+		return this.withExponentialBackoff(async () => {
 			const owner = await this.client.users.fetch(this.ownerId);
 			const dmChannel = await owner.createDM();
 
 			this.sessionChannelMap.set(sessionId, dmChannel.id);
 			this.channelSessionMap.set(dmChannel.id, sessionId);
 
-			// Send initial message
-			await dmChannel.send(`🚀 **ccremote Session Started**\nSession: ${sessionName} (${sessionId})\n\nI'll send notifications for this session here.`);
+			// Send initial message with retry
+			await this.withExponentialBackoff(async () => {
+				await dmChannel.send(`🚀 **ccremote Session Started**\nSession: ${sessionName} (${sessionId})\n\nI'll send notifications for this session here.`);
+			});
 
 			return dmChannel.id;
-		}
-		catch (error) {
-			throw new Error(`Failed to create Discord channel: ${error instanceof Error ? error.message : error}`);
-		}
+		}, 'create Discord channel');
 	}
 
 	async assignChannelToSession(sessionId: string, channelId: string): Promise<void> {
@@ -182,6 +182,45 @@ export class DiscordBot {
 		this.client.on('ccremote:approval', ({ sessionId, approved }: any) => {
 			handler(sessionId as string, approved as boolean);
 		});
+	}
+
+	/**
+	 * Execute an operation with exponential backoff retry for rate limits
+	 */
+	private async withExponentialBackoff<T>(
+		operation: () => Promise<T>,
+		operationName?: string,
+		maxRetries = 5,
+		baseDelay = 1000
+	): Promise<T> {
+		let lastError: Error;
+
+		for (let attempt = 0; attempt < maxRetries; attempt++) {
+			try {
+				return await operation();
+			} catch (error) {
+				lastError = error as Error;
+				const errorMessage = error instanceof Error ? error.message : String(error);
+				
+				// Check if this is a rate limit error
+				const isRateLimit = errorMessage.includes('too fast') || 
+								   errorMessage.includes('rate limit') ||
+								   errorMessage.includes('429');
+
+				if (!isRateLimit || attempt === maxRetries - 1) {
+					throw error;
+				}
+
+				// Calculate delay with exponential backoff + jitter
+				const delay = baseDelay * Math.pow(2, attempt) + Math.random() * 1000;
+				
+				console.warn(`${operationName || 'Discord operation'} rate limited (attempt ${attempt + 1}/${maxRetries}), retrying in ${Math.round(delay)}ms: ${errorMessage}`);
+				
+				await new Promise(resolve => setTimeout(resolve, delay));
+			}
+		}
+
+		throw lastError!;
 	}
 
 	async stop(): Promise<void> {

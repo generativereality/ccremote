@@ -46,7 +46,7 @@ export class DaemonManager {
 		const pm2Config = {
 			name: pm2Name,
 			script: daemonScript,
-			args: [JSON.stringify(config)],
+			args: [config.sessionId], // Just pass session ID
 			cwd: process.cwd(),
 			instances: 1,
 			autorestart: false, // We'll handle restarts ourselves
@@ -54,13 +54,14 @@ export class DaemonManager {
 			max_memory_restart: '1G',
 			env: {
 				NODE_ENV: 'production',
-				...process.env,
+				...process.env, // Inherit all environment including ccremote config
 			},
+			// Force all output to go to our log file
 			output: config.logFile,
-			error: config.logFile,
+			error: config.logFile, 
 			log: config.logFile,
 			merge_logs: true,
-			time: true,
+			time: false, // We'll add our own timestamps
 		};
 
 		// Write config to temp file (use .cjs extension for CommonJS in ES module project)
