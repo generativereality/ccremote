@@ -60,11 +60,35 @@ export const startCommand = define({
 				process.exit(1);
 			}
 
-			// After successful init, load the config again
+			// After successful init, confirm Discord bot setup
+			consola.info('');
+			consola.info('⚠️  Important: Before continuing, make sure you have:');
+			consola.info('   1. ✅ Created your Discord bot and copied the token');
+			consola.info('   2. ✅ Invited the bot to your Discord server with proper permissions');
+			consola.info('   3. ✅ The bot appears online in your server member list');
+			consola.info('');
+			
+			const botSetupComplete = await confirm({
+				message: 'Have you completed the Discord bot setup and verified the bot is online?',
+				initialValue: false,
+			});
+
+			if (isCancel(botSetupComplete) || !botSetupComplete) {
+				consola.info('');
+				consola.info('💡 Please complete the Discord bot setup before starting a session:');
+				consola.info('   • Review the instructions shown above');
+				consola.info('   • Invite your bot to a Discord server');
+				consola.info('   • Verify the bot appears online');
+				consola.info('   • Then run: ccremote start');
+				cancel('Session start cancelled - complete Discord bot setup first');
+				process.exit(1);
+			}
+
+			// After successful init and confirmation, load the config again
 			try {
 				config = loadConfig();
 				validateConfig(config);
-				consola.success('Configuration loaded successfully!');
+				consola.success('Configuration loaded and Discord bot setup confirmed!');
 				consola.info('');
 			}
 			catch (configError) {
