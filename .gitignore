@@ -11,3 +11,4 @@ coverage/
 .nyc_output/
 .eslintcache
 .claude/settings.local.json
+bun.lockb
