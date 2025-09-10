@@ -1,10 +1,12 @@
 import type { DaemonConfig } from '../core/daemon.js';
 import { consola } from 'consola';
 import { define } from 'gunshi';
+import { confirm, cancel, isCancel } from '@clack/prompts';
 import { loadConfig, validateConfig } from '../core/config.js';
 import { daemonManager } from '../core/daemon-manager.js';
 import { SessionManager } from '../core/session.js';
 import { TmuxManager } from '../core/tmux.js';
+import { initCommand } from './init.js';
 
 export const startCommand = define({
 	name: 'start',
@@ -32,16 +34,43 @@ export const startCommand = define({
 		catch (error) {
 			consola.error('Configuration error:', error instanceof Error ? error.message : error);
 			consola.error('');
-			consola.error('Please ensure you have set the required environment variables:');
-			consola.error('   CCREMOTE_DISCORD_BOT_TOKEN - Your Discord bot token');
-			consola.error('   CCREMOTE_DISCORD_OWNER_ID - Your Discord user ID');
-			consola.error('');
-			consola.error('You can set these in:');
-			consola.error('   - Environment variables');
-			consola.error('   - Project ccremote.env file');
-			consola.error('   - Project .env file');
-			consola.error('   - Global ~/.ccremote.env file');
-			process.exit(1);
+			consola.info('💡 ccremote needs to be configured before starting a session.');
+			consola.info('   The interactive setup will guide you through creating the configuration.');
+			consola.info('');
+
+			// Ask if user wants to run init
+			const shouldInit = await confirm({
+				message: 'Would you like to run the configuration setup now?',
+				initialValue: true,
+			});
+
+			if (isCancel(shouldInit) || !shouldInit) {
+				cancel('Setup cancelled. You can run configuration setup later with: ccremote init');
+				process.exit(1);
+			}
+
+			// Run init command
+			consola.info('');
+			consola.info('🚀 Starting configuration setup...');
+			try {
+				await initCommand.run({ values: { force: false } });
+			}
+			catch (initError) {
+				consola.error('Configuration setup failed:', initError instanceof Error ? initError.message : initError);
+				process.exit(1);
+			}
+
+			// After successful init, load the config again
+			try {
+				config = loadConfig();
+				validateConfig(config);
+				consola.success('Configuration loaded successfully!');
+				consola.info('');
+			}
+			catch (configError) {
+				consola.error('Failed to load configuration after setup:', configError instanceof Error ? configError.message : configError);
+				process.exit(1);
+			}
 		}
 
 		try {
