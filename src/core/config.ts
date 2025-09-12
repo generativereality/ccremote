@@ -56,6 +56,11 @@ export function loadConfig(): CCRemoteConfig {
 }
 
 function loadEnvFiles(): void {
+	// Skip loading env files during testing if requested
+	if (process.env.NODE_ENV === 'test' && process.env.SKIP_ENV_FILES) {
+		return;
+	}
+	
 	// Priority order for .env files
 	const envFiles = [
 		resolve(process.cwd(), 'ccremote.env'), // Project-specific ccremote.env
@@ -128,8 +133,17 @@ if (import.meta.vitest) {
 		beforeEach(() => {
 			// Clear environment
 			vi.resetModules();
-			delete process.env.CCREMOTE_DISCORD_BOT_TOKEN;
-			delete process.env.CCREMOTE_DISCORD_OWNER_ID;
+			
+			// Clear all CCREMOTE environment variables
+			for (const key in process.env) {
+				if (key.startsWith('CCREMOTE_')) {
+					delete process.env[key];
+				}
+			}
+			
+			// Skip env file loading during tests
+			process.env.NODE_ENV = 'test';
+			process.env.SKIP_ENV_FILES = 'true';
 		});
 
 		it('should load configuration from CCREMOTE_ prefixed environment variables', () => {

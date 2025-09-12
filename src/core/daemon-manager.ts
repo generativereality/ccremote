@@ -151,17 +151,9 @@ export class DaemonManager {
 			return false;
 		}
 
-		try {
-			// Check if process still exists
-			process.kill(daemon.pid, 0);
-			return true;
-		}
-		catch {
-			// Process doesn't exist
-			this.daemons.delete(sessionId);
-			void this.saveDaemonPids();
-			return false;
-		}
+		// For PM2 managed processes, we assume they're running if they're in our tracking
+		// PM2 handles process lifecycle management and restarts
+		return true;
 	}
 
 	/**
@@ -175,18 +167,8 @@ export class DaemonManager {
 	 * Get all running daemons
 	 */
 	getAllDaemons(): DaemonProcess[] {
-		return Array.from(this.daemons.values()).filter((daemon) => {
-			// Filter out dead processes
-			try {
-				process.kill(daemon.pid, 0);
-				return true;
-			}
-			catch {
-				this.daemons.delete(daemon.sessionId);
-				void this.saveDaemonPids();
-				return false;
-			}
-		});
+		// Return all tracked daemons - PM2 manages their lifecycle
+		return Array.from(this.daemons.values());
 	}
 
 	/**

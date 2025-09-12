@@ -39,7 +39,7 @@ export const listCommand = define({
 				consola.info(`${statusIcon} ${session.name} (${session.id})`);
 				consola.info(`   Status: ${session.status}`);
 				consola.info(`   Tmux: ${session.tmuxSession} ${tmuxIcon}`);
-				consola.info(`   Daemon: ${daemon ? `PID ${daemon.pid}` : 'Not running'} ${daemonIcon}`);
+				consola.info(`   Daemon: ${daemon ? `PM2 ${daemon.pm2Id}` : 'Not running'} ${daemonIcon}`);
 				consola.info(`   Discord: ${session.channelId || 'Not assigned'}`);
 				consola.info(`   Created: ${new Date(session.created).toLocaleString()}`);
 				consola.info(`   Last Activity: ${new Date(session.lastActivity).toLocaleString()}`);

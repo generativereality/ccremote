@@ -10,7 +10,7 @@
  * All output goes directly to session log files - no stdout/stderr pollution.
  */
 
-import type { MonitoringOptions } from './monitor.js';
+import type { MonitoringOptions, MonitorEvent } from './monitor.js';
 import { promises as fs } from 'node:fs';
 
 export type DaemonConfig = {
@@ -110,19 +110,19 @@ export class Daemon {
 			}
 
 			// Set up monitoring event handlers
-			this.monitor.on('limit_detected', (event) => {
+			this.monitor.on('limit_detected', (event: MonitorEvent) => {
 				void this.log('INFO', `Usage limit detected for session ${event.sessionId}`);
 			});
 
-			this.monitor.on('continuation_ready', (event) => {
+			this.monitor.on('continuation_ready', (event: MonitorEvent) => {
 				void this.log('INFO', `Auto-continuing session ${event.sessionId}`);
 			});
 
-			this.monitor.on('approval_needed', (event) => {
+			this.monitor.on('approval_needed', (event: MonitorEvent) => {
 				void this.log('INFO', `Approval required for session ${event.sessionId}`);
 			});
 
-			this.monitor.on('error', (event) => {
+			this.monitor.on('error', (event: MonitorEvent) => {
 				void this.log('ERROR', `Monitor error for session ${event.sessionId}: ${event.data?.error || 'Unknown error'}`);
 			});
 

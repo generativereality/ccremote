@@ -61,7 +61,7 @@ export const stopCommand = define({
 
 			// Stop daemon first
 			if (daemonRunning) {
-				consola.info(`Stopping daemon process (PID: ${daemon.pid})...`);
+				consola.info(`Stopping daemon process (PM2: ${daemon.pm2Id})...`);
 				const daemonStopped = await daemonManager.stopDaemon(session.id);
 				if (!daemonStopped) {
 					consola.warn('Daemon was not running or already stopped');
@@ -84,7 +84,7 @@ export const stopCommand = define({
 			consola.info(`  ID: ${session.id}`);
 			consola.info(`  Tmux session: ${session.tmuxSession} ${tmuxActive ? '(killed)' : '(already dead)'}`);
 			if (daemon) {
-				consola.info(`  Daemon: PID ${daemon.pid} ${daemonRunning ? '(stopped)' : '(already dead)'}`);
+				consola.info(`  Daemon: PM2 ${daemon.pm2Id} ${daemonRunning ? '(stopped)' : '(already dead)'}`);
 			}
 		}
 		catch (error) {

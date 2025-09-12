@@ -53,7 +53,26 @@ export const startCommand = define({
 			consola.info('');
 			consola.info('🚀 Starting configuration setup...');
 			try {
-				await initCommand.run({ values: { force: false } });
+				if (!initCommand) {
+					throw new Error('Init command not available');
+				}
+				
+				const ctx = {
+					values: { force: false },
+					name: 'init',
+					description: 'Initialize ccremote configuration',
+					locale: 'en',
+					env: process.env,
+					command: initCommand,
+					args: [],
+					raw: [],
+					rawArgs: {},
+					flags: { force: false },
+					params: {},
+					rest: [],
+					parent: null
+				};
+				await (initCommand as any).run(ctx as any);
 			}
 			catch (initError) {
 				consola.error('Configuration setup failed:', initError instanceof Error ? initError.message : initError);
@@ -160,7 +179,7 @@ export const startCommand = define({
 			consola.info(`  Name: ${session.name}`);
 			consola.info(`  ID: ${session.id}`);
 			consola.info(`  Tmux: ${session.tmuxSession}`);
-			consola.info(`  Daemon PID: ${daemon.pid}`);
+			consola.info(`  Daemon PM2: ${daemon.pm2Id}`);
 			consola.info('');
 			consola.info('💡 Usage:');
 			consola.info('  • Use Claude Code normally - daemon will monitor for limits and approvals');
@@ -194,7 +213,7 @@ export const startCommand = define({
 				if (code === 0) {
 					consola.info('');
 					consola.info('👋 Detached from tmux session');
-					consola.info(`   Session ${session.id} daemon continues running (PID: ${daemon.pid})`);
+					consola.info(`   Session ${session.id} daemon continues running (PM2: ${daemon.pm2Id})`);
 					consola.info(`   Reattach anytime with: tmux attach -t ${session.tmuxSession}`);
 					consola.info(`   Stop session with: ccremote stop --session ${session.id}`);
 					consola.info(`   View logs: tail -f ${logFile}`);
