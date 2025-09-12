@@ -96,7 +96,7 @@ ccremote start --name "test" --command "claude --debug"
 1. Creates unique tmux session (e.g., `ccremote-1`)
 2. Launches Claude Code inside the session
 3. Initializes monitoring and state tracking
-4. Shows session details for 3 seconds
+4. Shows session details for 5 seconds
 5. Attaches you to the session (unless `--no-attach`)
 6. Starts background monitoring process
 

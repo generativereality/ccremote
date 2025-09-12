@@ -59,7 +59,7 @@ ccremote start --name "my-project"
 
 This will:
 1. Create a new tmux session running Claude Code
-2. Show session details for 3 seconds
+2. Show session details for 5 seconds
 3. Automatically attach you to the Claude Code session
 4. Start monitoring in the background
 

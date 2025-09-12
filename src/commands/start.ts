@@ -197,7 +197,7 @@ export const startCommand = define({
 			});
 
 			// Give user a moment to read the info, then attach
-			consola.info('🔄 Attaching to Claude Code session in 3 seconds...');
+			consola.info('🔄 Attaching to Claude Code session in 5 seconds...');
 			consola.info('   (Press Ctrl+B then D to detach - daemon continues in background)');
 			consola.info(`   View daemon logs: tail -f ${logFile}`);
 

@@ -122,7 +122,7 @@ async function tryContinueAndCheckResponse(sessionName) {
 							}
 
 							// Wait for response and check
-							await sleep(3000); // Wait 3 seconds for response
+							await sleep(5000); // Wait 5 seconds for response
 							const responseOutput = await captureTmuxOutput(sessionName);
 
 							// Check if the same limit message still appears

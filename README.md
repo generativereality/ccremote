@@ -57,7 +57,7 @@ That's it! You'll be automatically attached to a Claude Code session with monito
    ```
    This automatically:
    - Creates a tmux session with Claude Code running
-   - Shows session details for 3 seconds
+   - Shows session details for 5 seconds
    - Attaches you directly to the Claude Code session
 
 3. **Work Normally**:
