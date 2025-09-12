@@ -42,38 +42,24 @@ export class DaemonManager {
 			daemonScript = join(import.meta.dirname, '../../dist/daemon.js');
 		}
 		
-		// Create PM2 ecosystem config for this daemon
-		const pm2Config = {
-			name: pm2Name,
-			script: daemonScript,
-			args: [config.sessionId], // Just pass session ID
-			cwd: process.cwd(),
-			instances: 1,
-			autorestart: false, // We'll handle restarts ourselves
-			watch: false,
-			max_memory_restart: '1G',
-			env: {
-				NODE_ENV: 'production',
-				...process.env, // Inherit all environment including ccremote config
-			},
-			// Force all output to go to our log file
-			output: config.logFile,
-			error: config.logFile, 
-			log: config.logFile,
-			merge_logs: true,
-			time: false, // We'll add our own timestamps
-		};
+		// Use direct PM2 command with environment variables - simple and reliable
+		// Don't specify log files to avoid race conditions - daemon handles its own logging
+		const pm2Args = [
+			'pm2', 'start', daemonScript,
+			'--name', pm2Name,
+			'--no-autorestart' // We'll handle restarts ourselves
+		];
 
-		// Write config to temp file (use .cjs extension for CommonJS in ES module project)
-		const configFile = join(process.cwd(), '.ccremote', `${pm2Name}.config.cjs`);
-		await fs.mkdir(join(process.cwd(), '.ccremote'), { recursive: true });
-		await fs.writeFile(configFile, `module.exports = ${JSON.stringify(pm2Config, null, 2)}`);
-
-		// Start with PM2
+		// Start with PM2 using environment variables for config
 		return new Promise((resolve, reject) => {
-			const pm2Process = spawn('npx', ['pm2', 'start', configFile], {
+			const pm2Process = spawn('npx', pm2Args, {
 				stdio: ['ignore', 'pipe', 'pipe'],
 				cwd: process.cwd(),
+				env: {
+					...process.env,
+					NODE_ENV: 'production',
+					CCREMOTE_SESSION_ID: config.sessionId, // Pass session ID via environment
+				}
 			});
 
 			let stdout = '';
@@ -146,15 +132,7 @@ export class DaemonManager {
 				});
 
 				deleteProcess.on('close', async () => {
-					// Clean up config file
-					try {
-						const configFile = join(process.cwd(), '.ccremote', `${daemon.pm2Id}.config.cjs`);
-						await fs.unlink(configFile);
-					} catch {
-						// Ignore if file doesn't exist
-					}
-
-					// Remove from tracking
+					// Remove from tracking  
 					this.daemons.delete(sessionId);
 					await this.saveDaemonPids();
 

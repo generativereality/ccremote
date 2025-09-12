@@ -39,19 +39,18 @@ export class Daemon {
 	}
 
 	/**
-	 * Log to the session log file (daemon output only goes here)
+	 * Log to file directly
 	 */
 	private async log(level: 'INFO' | 'WARN' | 'ERROR', message: string): Promise<void> {
 		const timestamp = new Date().toISOString();
 		const logEntry = `${timestamp} [DAEMON:${level}] ${message}\n`;
 		
-		// Debug: Also log to console for PM2 to capture
-		console.info(`${timestamp} [DAEMON:${level}] ${message}`);
-		
 		try {
 			await fs.appendFile(this.logFile, logEntry);
 		} catch (error) {
+			// Fallback to console if file write fails
 			console.error(`Failed to write to log file ${this.logFile}:`, error);
+			console.info(logEntry.trim());
 		}
 	}
 
@@ -245,10 +244,10 @@ export class Daemon {
  */
 export async function startDaemon(): Promise<void> {
 	try {
-		const sessionId = process.argv[2];
+		const sessionId = process.env.CCREMOTE_SESSION_ID;
 		
 		if (!sessionId) {
-			console.info('Usage: daemon <session-id>');
+			console.error('CCREMOTE_SESSION_ID environment variable is required');
 			process.exit(1);
 		}
 
@@ -273,14 +272,7 @@ export async function startDaemon(): Promise<void> {
 		await daemon.start();
 	}
 	catch (error) {
-		const sessionId = process.argv[2];
-		const logFile = sessionId ? `.ccremote/session-${sessionId}.log` : '.ccremote/daemon-error.log';
-		
-		try {
-			await fs.appendFile(logFile, `${new Date().toISOString()} [DAEMON:ERROR] Failed to start daemon: ${error instanceof Error ? error.message : String(error)}\n`);
-		} catch {
-			console.error(`Failed to start daemon: ${error instanceof Error ? error.message : String(error)}`);
-		}
+		console.error(`${new Date().toISOString()} [DAEMON:ERROR] Failed to start daemon: ${error instanceof Error ? error.message : String(error)}`);
 		process.exit(1);
 	}
 }

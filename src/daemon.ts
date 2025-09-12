@@ -9,7 +9,8 @@
 
 import { startDaemon } from './core/daemon.js';
 
-// If this module is run directly, start the daemon
-if (import.meta.url === `file://${process.argv[1]}`) {
+// If this module is run directly or through PM2, start the daemon
+// PM2 uses ProcessContainerFork.js wrapper, so we check if this is the main module
+if (import.meta.url === `file://${process.argv[1]}` || process.argv[1].includes('ProcessContainerFork.js')) {
 	void startDaemon();
 }
