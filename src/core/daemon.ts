@@ -11,7 +11,6 @@
  */
 
 import type { MonitorEvent, MonitoringOptions } from './monitor.js';
-import { promises as fs } from 'node:fs';
 
 export type DaemonConfig = {
 	sessionId: string;
@@ -39,20 +38,14 @@ export class Daemon {
 	}
 
 	/**
-	 * Log to file directly
+	 * Log to console (PM2 redirects to file)
 	 */
-	private async log(level: 'INFO' | 'WARN' | 'ERROR', message: string): Promise<void> {
+	private log(level: 'INFO' | 'WARN' | 'ERROR', message: string): void {
 		const timestamp = new Date().toISOString();
-		const logEntry = `${timestamp} [DAEMON:${level}] ${message}\n`;
-
-		try {
-			await fs.appendFile(this.logFile, logEntry);
-		}
-		catch (error) {
-			// Fallback to console if file write fails
-			console.error(`Failed to write to log file ${this.logFile}:`, error);
-			console.info(logEntry.trim());
-		}
+		const logEntry = `${timestamp} [DAEMON:${level}] ${message}`;
+		
+		// PM2 now redirects console output to the log file
+		console.info(logEntry);
 	}
 
 	/**
@@ -60,8 +53,8 @@ export class Daemon {
 	 */
 	async start(): Promise<void> {
 		try {
-			await this.log('INFO', `Daemon starting for session ${this.config.sessionId} (PID: ${process.pid})`);
-			await this.log('INFO', `Working directory: ${process.cwd()}`);
+			this.log('INFO', `Daemon starting for session ${this.config.sessionId} (PID: ${process.pid})`);
+			this.log('INFO', `Working directory: ${process.cwd()}`);
 
 			// Ensure we're in the correct directory for Discord.js package resolution
 			// Since Discord.js looks for package.json in parent directories, we need to be in a dir with node_modules
@@ -94,7 +87,7 @@ export class Daemon {
 			}
 
 			// Start Discord bot
-			await this.log('INFO', 'Starting Discord bot...');
+			this.log('INFO', 'Starting Discord bot...');
 			await this.discordBot.start(
 				this.config.discordBotToken,
 				this.config.discordOwnerId,
@@ -112,24 +105,24 @@ export class Daemon {
 
 			// Set up monitoring event handlers
 			this.monitor.on('limit_detected', (event: MonitorEvent) => {
-				void this.log('INFO', `Usage limit detected for session ${event.sessionId}`);
+				this.log('INFO', `Usage limit detected for session ${event.sessionId}`);
 			});
 
 			this.monitor.on('continuation_ready', (event: MonitorEvent) => {
-				void this.log('INFO', `Auto-continuing session ${event.sessionId}`);
+				this.log('INFO', `Auto-continuing session ${event.sessionId}`);
 			});
 
 			this.monitor.on('approval_needed', (event: MonitorEvent) => {
-				void this.log('INFO', `Approval required for session ${event.sessionId}`);
+				this.log('INFO', `Approval required for session ${event.sessionId}`);
 			});
 
 			this.monitor.on('error', (event: MonitorEvent) => {
-				void this.log('ERROR', `Monitor error for session ${event.sessionId}: ${event.data?.error || 'Unknown error'}`);
+				this.log('ERROR', `Monitor error for session ${event.sessionId}: ${event.data?.error || 'Unknown error'}`);
 			});
 
 			// Set up Discord option selection handler
 			this.discordBot.onOptionSelected((sessionId: string, optionNumber: number) => {
-				void this.log('INFO', `Discord option selected: ${optionNumber} for session ${sessionId}`);
+				this.log('INFO', `Discord option selected: ${optionNumber} for session ${sessionId}`);
 
 				// Handle async operations
 				void (async () => {
@@ -142,17 +135,17 @@ export class Daemon {
 							// Update session status back to active
 							await this.sessionManager.updateSession(sessionId, { status: 'active' });
 
-							await this.log('INFO', `Sent option ${optionNumber} to tmux session ${sessionData.tmuxSession}`);
+							this.log('INFO', `Sent option ${optionNumber} to tmux session ${sessionData.tmuxSession}`);
 						}
 					}
 					catch (error) {
-						await this.log('ERROR', `Failed to send option selection: ${error instanceof Error ? error.message : String(error)}`);
+						this.log('ERROR', `Failed to send option selection: ${error instanceof Error ? error.message : String(error)}`);
 					}
 				})();
 			});
 
 			// Start monitoring
-			await this.log('INFO', 'Starting session monitoring...');
+			this.log('INFO', 'Starting session monitoring...');
 			await this.monitor.startMonitoring(this.config.sessionId);
 
 			// Set up graceful shutdown
@@ -167,13 +160,13 @@ export class Daemon {
 			});
 
 			this.running = true;
-			await this.log('INFO', 'Daemon started successfully');
+			this.log('INFO', 'Daemon started successfully');
 
 			// Keep the process alive
 			await this.runLoop();
 		}
 		catch (error) {
-			await this.log('ERROR', `Failed to start daemon: ${error instanceof Error ? error.message : String(error)}`);
+			this.log('ERROR', `Failed to start daemon: ${error instanceof Error ? error.message : String(error)}`);
 			process.exit(1);
 		}
 	}
@@ -187,14 +180,14 @@ export class Daemon {
 				// Check if session still exists
 				const session = await this.sessionManager.getSession(this.config.sessionId);
 				if (!session) {
-					await this.log('ERROR', 'Session no longer exists, shutting down daemon');
+					this.log('ERROR', 'Session no longer exists, shutting down daemon');
 					break;
 				}
 
 				// Check if tmux session still exists
 				const tmuxExists = await this.tmuxManager.sessionExists(session.tmuxSession);
 				if (!tmuxExists) {
-					await this.log('INFO', 'Tmux session ended, shutting down daemon');
+					this.log('INFO', 'Tmux session ended, shutting down daemon');
 					await this.sessionManager.updateSession(this.config.sessionId, { status: 'ended' });
 					break;
 				}
@@ -203,7 +196,7 @@ export class Daemon {
 				await new Promise(resolve => setTimeout(resolve, 10000)); // 10 seconds
 			}
 			catch (error) {
-				await this.log('ERROR', `Error in daemon loop: ${error instanceof Error ? error.message : String(error)}`);
+				this.log('ERROR', `Error in daemon loop: ${error instanceof Error ? error.message : String(error)}`);
 				await new Promise(resolve => setTimeout(resolve, 5000)); // Wait before retrying
 			}
 		}
@@ -219,7 +212,7 @@ export class Daemon {
 			return;
 		}
 
-		await this.log('INFO', `Daemon shutting down (${reason})`);
+		this.log('INFO', `Daemon shutting down (${reason})`);
 		this.running = false;
 
 		try {
@@ -229,10 +222,10 @@ export class Daemon {
 			// Stop Discord bot
 			await this.discordBot.stop();
 
-			await this.log('INFO', 'Daemon shut down successfully');
+			this.log('INFO', 'Daemon shut down successfully');
 		}
 		catch (error) {
-			await this.log('ERROR', `Error during shutdown: ${error instanceof Error ? error.message : String(error)}`);
+			this.log('ERROR', `Error during shutdown: ${error instanceof Error ? error.message : String(error)}`);
 		}
 
 		process.exit(0);
