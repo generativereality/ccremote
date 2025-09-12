@@ -17,9 +17,22 @@ export class TmuxManager {
 
 	async createSession(sessionName: string): Promise<void> {
 		try {
-			// Create new tmux session with mouse mode enabled
-			const createCommand = `tmux new-session -d -s "${sessionName}" -c "${process.cwd()}" \\; set -g mouse on`;
+			// Use ccremote-specific tmux config if it exists, otherwise use default with mouse mode
+			const ccremoteConfig = `${process.env.HOME}/.ccremote/tmux.conf`;
+			const fs = await import('node:fs');
+			const hasConfig = fs.existsSync(ccremoteConfig);
+			
+			const createCommand = hasConfig
+				? `tmux new-session -d -s "${sessionName}" -c "${process.cwd()}"`
+				: `tmux new-session -d -s "${sessionName}" -c "${process.cwd()}" \\; set -g mouse on`;
+			
 			await execAsync(createCommand);
+
+			// Load ccremote config into the session if it exists
+			if (hasConfig) {
+				const sourceCommand = `tmux source-file "${ccremoteConfig}"`;
+				await execAsync(sourceCommand);
+			}
 
 			// Start Claude in the session
 			const startClaudeCommand = `tmux send-keys -t "${sessionName}" "claude" Enter`;
