@@ -468,15 +468,8 @@ export class Monitor extends EventEmitter {
 
 	private async handleSessionEnded(sessionId: string): Promise<void> {
 		await this.stopMonitoring(sessionId);
-		await this.sessionManager.updateSession(sessionId, { status: 'ended' });
-
-		// Notify Discord
-		await this.discordBot.sendNotification(sessionId, {
-			type: 'error',
-			sessionId,
-			sessionName: (await this.sessionManager.getSession(sessionId))?.name || sessionId,
-			message: 'Session ended - tmux session no longer exists.',
-		});
+		// Don't update session status or send notification here - 
+		// the daemon's runLoop will handle this more gracefully
 	}
 
 	private async handlePollingError(sessionId: string, error: unknown): Promise<void> {

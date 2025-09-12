@@ -145,6 +145,9 @@ export class DiscordBot {
 			case 'error':
 				return `❌ **${sessionName}** - Error\n\n${message}`;
 
+			case 'session_ended':
+				return `🏁 **${sessionName}** - Session Ended\n\n${message}`;
+
 			default:
 				return `📝 **${sessionName}**\n\n${message}`;
 		}

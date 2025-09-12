@@ -31,7 +31,7 @@ export type MonitorState = {
 };
 
 export type NotificationMessage = {
-	type: 'limit' | 'continued' | 'approval' | 'error';
+	type: 'limit' | 'continued' | 'approval' | 'error' | 'session_ended';
 	sessionId: string;
 	sessionName: string;
 	message: string;

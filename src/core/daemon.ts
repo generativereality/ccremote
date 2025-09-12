@@ -187,8 +187,23 @@ export class Daemon {
 				// Check if tmux session still exists
 				const tmuxExists = await this.tmuxManager.sessionExists(session.tmuxSession);
 				if (!tmuxExists) {
-					this.log('INFO', 'Tmux session ended, shutting down daemon');
+					this.log('INFO', `Tmux session ${session.tmuxSession} ended, gracefully shutting down daemon`);
+					
+					// Update session status to ended
 					await this.sessionManager.updateSession(this.config.sessionId, { status: 'ended' });
+					
+					// Notify via Discord that session has ended
+					try {
+						await this.discordBot.sendNotification(this.config.sessionId, {
+							type: 'session_ended',
+							sessionId: this.config.sessionId,
+							sessionName: session.name,
+							message: `Session **${session.name}** has ended. The tmux session was closed.`,
+						});
+					} catch (error) {
+						this.log('ERROR', `Failed to send session end notification: ${error instanceof Error ? error.message : String(error)}`);
+					}
+					
 					break;
 				}
 
