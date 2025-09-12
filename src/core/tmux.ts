@@ -122,9 +122,9 @@ export class TmuxManager {
 		await this.sendRawKeys(sessionName, 'Enter');
 	}
 
-	async sendApprovalResponse(sessionName: string, approved: boolean): Promise<void> {
-		// Send '1' for approve, '2' for deny (Claude Code approval format)
-		const response = approved ? '1' : '2';
+	async sendOptionSelection(sessionName: string, optionNumber: number): Promise<void> {
+		// Send the specific option number (1, 2, 3, etc.)
+		const response = String(optionNumber);
 		await this.sendRawKeys(sessionName, response);
 	}
 }

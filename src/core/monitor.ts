@@ -345,17 +345,30 @@ export class Monitor extends EventEmitter {
 	}
 
 	/**
-	 * Extract approval information from the detected dialog
+	 * Extract approval information from the detected dialog including all available options
 	 */
-	private extractApprovalInfo(output: string): { tool: string; action: string; question: string } {
+	private extractApprovalInfo(output: string): { tool: string; action: string; question: string; options: Array<{ number: number; text: string; shortcut?: string }> } {
 		const lines = output.split('\n');
 		let question = '';
 		let tool = 'Unknown';
 		let action = 'Unknown operation';
+		const options: Array<{ number: number; text: string; shortcut?: string }> = [];
 
 		for (const line of lines) {
 			// Clean line of box drawing characters and extra whitespace
-			const cleanLine = line.replace(/[│┃┆┊╎╏║╭╮╯╰┌┐└┘├┤┬┴┼─━┄┅┈┉═╔╗╚╝╠╣╦╩╬]/g, '').replace(/\s+/g, ' ').trim();
+			const cleanLine = line.replace(/[│┃┆┊╎╏║╭╮╯╰┌┐└┘├┤┬┴┼─━┄┅┈┉═╔╗╚╝╠╣╦╩╬❯]/g, '').replace(/\s+/g, ' ').trim();
+
+			// Extract numbered options (e.g. "1. Yes", "2. Yes, allow all edits during this session (shift+tab)", "3. No, and tell Claude what to do differently (esc)")
+			const optionMatch = cleanLine.match(/^(\d+)\.\s*(.+?)(?:\s*\(([^)]+)\))?$/);
+			if (optionMatch) {
+				const [, numberStr, text, shortcut] = optionMatch;
+				const number = Number.parseInt(numberStr, 10);
+				options.push({
+					number,
+					text: text.trim(),
+					shortcut: shortcut?.trim(),
+				});
+			}
 
 			// Extract the specific question
 			if (this.patterns.approvalDialog.question.test(cleanLine)) {
@@ -394,11 +407,10 @@ export class Monitor extends EventEmitter {
 						action = 'Proceed with operation';
 					}
 				}
-				break;
 			}
 		}
 
-		return { tool, action, question };
+		return { tool, action, question, options };
 	}
 
 	private async handleApprovalRequest(sessionId: string, output: string): Promise<void> {
@@ -427,16 +439,24 @@ export class Monitor extends EventEmitter {
 
 		this.emit('approval_needed', event);
 
+		// Format options for Discord display
+		const optionsText = approvalInfo.options.length > 0
+			? approvalInfo.options.map(opt =>
+					`**${opt.number}.** ${opt.text}${opt.shortcut ? ` *(${opt.shortcut})*` : ''}`,
+				).join('\n')
+			: 'No options detected';
+
 		// Send Discord notification
 		await this.discordBot.sendNotification(sessionId, {
 			type: 'approval',
 			sessionId,
 			sessionName: (await this.sessionManager.getSession(sessionId))?.name || sessionId,
-			message: `🔐 Approval Required\n\n**Tool:** ${approvalInfo.tool}\n**Action:** ${approvalInfo.action}\n**Question:** ${approvalInfo.question}\n\nReply with 'approve' or 'deny'`,
+			message: `🔐 Approval Required\n\n**Tool:** ${approvalInfo.tool}\n**Action:** ${approvalInfo.action}\n**Question:** ${approvalInfo.question}\n\n**Options:**\n${optionsText}\n\nReply with the option number (e.g. '1', '2', '3')`,
 			metadata: {
 				toolName: approvalInfo.tool,
 				action: approvalInfo.action,
 				question: approvalInfo.question,
+				options: approvalInfo.options,
 				approvalRequested: true,
 				timestamp: new Date().toISOString(),
 			},
@@ -788,6 +808,10 @@ More text here`;
 				expect(result.tool).toBe('Edit');
 				expect(result.action).toBe('Edit tmux.ts');
 				expect(result.question).toBe('Do you want to make this edit to tmux.ts?');
+				expect(result.options).toHaveLength(3);
+				expect(result.options[0]).toEqual({ number: 1, text: 'Yes' });
+				expect(result.options[1]).toEqual({ number: 2, text: 'Yes, allow all edits during this session', shortcut: 'shift+tab' });
+				expect(result.options[2]).toEqual({ number: 3, text: 'No, and tell Claude what to do differently', shortcut: 'esc' });
 			});
 
 			it('should extract approval info from proceed dialog', () => {
@@ -795,6 +819,9 @@ More text here`;
 				expect(result.tool).toBe('Tool');
 				expect(result.action).toBe('Proceed with operation');
 				expect(result.question).toBe('Do you want to proceed?');
+				expect(result.options).toHaveLength(2);
+				expect(result.options[0]).toEqual({ number: 1, text: 'Yes' });
+				expect(result.options[1]).toEqual({ number: 2, text: 'No' });
 			});
 
 			it('should extract approval info from bash command dialog', () => {
@@ -802,6 +829,10 @@ More text here`;
 				expect(result.tool).toBe('Bash');
 				expect(result.action).toBe('Execute: vitest run src/core/monitor.ts');
 				expect(result.question).toBe('Do you want to proceed?');
+				expect(result.options).toHaveLength(3);
+				expect(result.options[0]).toEqual({ number: 1, text: 'Yes' });
+				expect(result.options[1]).toEqual({ number: 2, text: 'Yes, and don\'t ask again for vitest run commands in /Users/motin/Dev/Projects/generative-reality/ccremote' });
+				expect(result.options[2]).toEqual({ number: 3, text: 'No, and tell Claude what to do differently', shortcut: 'esc' });
 			});
 
 			it('should extract approval info from file creation dialog', () => {
@@ -809,6 +840,10 @@ More text here`;
 				expect(result.tool).toBe('Write');
 				expect(result.action).toBe('Create debug-stop.js');
 				expect(result.question).toBe('Do you want to create debug-stop.js?');
+				expect(result.options).toHaveLength(3);
+				expect(result.options[0]).toEqual({ number: 1, text: 'Yes' });
+				expect(result.options[1]).toEqual({ number: 2, text: 'Yes, allow all edits during this session', shortcut: 'shift+tab' });
+				expect(result.options[2]).toEqual({ number: 3, text: 'No, and tell Claude what to do differently', shortcut: 'esc' });
 			});
 		});
 	});

@@ -127,26 +127,26 @@ export class Daemon {
 				void this.log('ERROR', `Monitor error for session ${event.sessionId}: ${event.data?.error || 'Unknown error'}`);
 			});
 
-			// Set up Discord approval handler - this was missing!
-			this.discordBot.onApproval((sessionId: string, approved: boolean) => {
-				void this.log('INFO', `Discord approval: ${approved ? 'approved' : 'denied'} for session ${sessionId}`);
+			// Set up Discord option selection handler
+			this.discordBot.onOptionSelected((sessionId: string, optionNumber: number) => {
+				void this.log('INFO', `Discord option selected: ${optionNumber} for session ${sessionId}`);
 
 				// Handle async operations
 				void (async () => {
 					try {
-						// Send the approval response to tmux session
+						// Send the option selection to tmux session
 						const sessionData = await this.sessionManager.getSession(sessionId);
 						if (sessionData) {
-							await this.tmuxManager.sendApprovalResponse(sessionData.tmuxSession, approved);
+							await this.tmuxManager.sendOptionSelection(sessionData.tmuxSession, optionNumber);
 
 							// Update session status back to active
 							await this.sessionManager.updateSession(sessionId, { status: 'active' });
 
-							await this.log('INFO', `Sent ${approved ? '1' : '2'} to tmux session ${sessionData.tmuxSession}`);
+							await this.log('INFO', `Sent option ${optionNumber} to tmux session ${sessionData.tmuxSession}`);
 						}
 					}
 					catch (error) {
-						await this.log('ERROR', `Failed to send approval response: ${error instanceof Error ? error.message : String(error)}`);
+						await this.log('ERROR', `Failed to send option selection: ${error instanceof Error ? error.message : String(error)}`);
 					}
 				})();
 			});

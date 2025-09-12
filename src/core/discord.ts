@@ -66,13 +66,21 @@ export class DiscordBot {
 		}
 
 		try {
-			if (content === 'approve') {
-				await this.handleApproval(sessionId, true);
-				await message.reply('✅ Approved');
+			// Handle numeric option selection (1, 2, 3, etc.)
+			const numericMatch = content.match(/^(\d+)$/);
+			if (numericMatch) {
+				const optionNumber = Number.parseInt(numericMatch[1], 10);
+				await this.handleOptionSelection(sessionId, optionNumber);
+				await message.reply(`✅ Selected option ${optionNumber}`);
+			}
+			// Legacy support for approve/deny (maps to 1/2)
+			else if (content === 'approve') {
+				await this.handleOptionSelection(sessionId, 1);
+				await message.reply('✅ Approved (option 1)');
 			}
 			else if (content === 'deny') {
-				await this.handleApproval(sessionId, false);
-				await message.reply('❌ Denied');
+				await this.handleOptionSelection(sessionId, 2);
+				await message.reply('❌ Denied (option 2)');
 			}
 			else if (content === 'status') {
 				await this.handleStatus(sessionId, message);
@@ -167,10 +175,9 @@ export class DiscordBot {
 		this.channelSessionMap.set(channelId, sessionId);
 	}
 
-	private async handleApproval(sessionId: string, approved: boolean): Promise<void> {
-		// This will be called by the approval handler
-		// For now, just emit an event that the monitor can listen to
-		this.client.emit('ccremote:approval', { sessionId, approved });
+	private async handleOptionSelection(sessionId: string, optionNumber: number): Promise<void> {
+		// Emit event with the selected option number
+		this.client.emit('ccremote:option_selected', { sessionId, optionNumber });
 	}
 
 	private async handleStatus(sessionId: string, message: Message): Promise<void> {
@@ -178,9 +185,9 @@ export class DiscordBot {
 		await message.reply(`📊 Session status for ${sessionId} - implementation pending`);
 	}
 
-	onApproval(handler: (sessionId: string, approved: boolean) => void): void {
-		this.client.on('ccremote:approval', ({ sessionId, approved }: any) => {
-			handler(sessionId as string, approved as boolean);
+	onOptionSelected(handler: (sessionId: string, optionNumber: number) => void): void {
+		this.client.on('ccremote:option_selected', ({ sessionId, optionNumber }: any) => {
+			handler(sessionId as string, optionNumber as number);
 		});
 	}
 

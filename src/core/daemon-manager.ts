@@ -8,7 +8,7 @@
 import type { DaemonConfig } from './daemon.js';
 import { spawn } from 'node:child_process';
 import { promises as fs } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export type DaemonProcess = {
@@ -34,7 +34,7 @@ export class DaemonManager {
 		const currentFileUrl = import.meta.url;
 		const currentFilePath = fileURLToPath(currentFileUrl);
 		const currentDir = dirname(currentFilePath);
-		
+
 		// Try to find PM2 in several locations
 		const possiblePaths = [
 			// In development: ccremote/src/core/daemon-manager.ts -> ccremote/node_modules/pm2/bin/pm2
@@ -50,7 +50,7 @@ export class DaemonManager {
 		// Test each path and return the first one that exists
 		for (const path of possiblePaths) {
 			try {
-				require('fs').accessSync(path, require('fs').constants.F_OK);
+				require('node:fs').accessSync(path, require('node:fs').constants.F_OK);
 				return path;
 			}
 			catch {
@@ -66,10 +66,10 @@ export class DaemonManager {
 	 */
 	private preparePm2Command(args: string[]): { binary: string; args: string[] } {
 		const pm2Binary = this.getPm2BinaryPath();
-		
+
 		return {
 			binary: pm2Binary,
-			args: args
+			args,
 		};
 	}
 
@@ -81,12 +81,12 @@ export class DaemonManager {
 		const currentFileUrl = import.meta.url;
 		const currentFilePath = fileURLToPath(currentFileUrl);
 		const currentDir = dirname(currentFilePath);
-		
+
 		// Try different locations for the daemon script
 		const possiblePaths = [
 			// In development: ccremote/src/core/daemon-manager.ts -> ccremote/dist/daemon.js
 			join(currentDir, '../../dist/daemon.js'),
-			// In bundled dist: ccremote/dist/core/daemon-manager.js -> ccremote/dist/daemon.js  
+			// In bundled dist: ccremote/dist/core/daemon-manager.js -> ccremote/dist/daemon.js
 			join(currentDir, '../daemon.js'),
 			// As fallback, try the same directory
 			join(currentDir, 'daemon.js'),
@@ -113,7 +113,7 @@ export class DaemonManager {
 
 		// Get the daemon script path
 		const daemonScript = await this.getDaemonScriptPath();
-		
+
 		// Prepare PM2 command with log redirection
 		const pm2Command = this.preparePm2Command([
 			'start',
@@ -123,7 +123,7 @@ export class DaemonManager {
 			'--no-autorestart', // We'll handle restarts ourselves
 			'--output',
 			config.logFile, // Redirect stdout to daemon log file
-			'--error', 
+			'--error',
 			config.logFile, // Redirect stderr to daemon log file
 			'--merge-logs', // Merge stdout and stderr into single file
 		]);
