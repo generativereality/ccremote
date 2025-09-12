@@ -3,8 +3,16 @@
   "type": "module",
   "version": "0.1.0",
   "description": "Remote Claude Code control with auto-continuation and Discord approvals",
-  "author": "",
+  "author": "ccremote contributors",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/generativereality/ccremote.git"
+  },
+  "homepage": "https://github.com/generativereality/ccremote#readme",
+  "bugs": {
+    "url": "https://github.com/generativereality/ccremote/issues"
+  },
   "keywords": [
     "claude",
     "claude-code",
@@ -18,10 +26,11 @@
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "bin": "./dist/index.js",
+  "bin": {
+    "ccremote": "dist/index.js"
+  },
   "files": [
-    "dist",
-    "node_modules/pm2"
+    "dist"
   ],
   "engines": {
     "node": ">=20.19.4"
@@ -32,6 +41,7 @@
     "format": "bun run lint --fix",
     "lint": "eslint --cache .",
     "prepack": "bun run build",
+    "prepublishOnly": "publint",
     "check": "bun lint && bun typecheck && vitest && bun run build",
     "release": "bun run check && bumpp",
     "start": "bun run ./src/index.ts",
@@ -50,6 +60,7 @@
     "@types/node": "^20.11.16",
     "bumpp": "^10.2.3",
     "eslint": "^9.33.0",
+    "publint": "^0.3.12",
     "eslint-plugin-format": "^1.0.1",
     "gunshi": "^0.26.3",
     "tsdown": "^0.14.1",

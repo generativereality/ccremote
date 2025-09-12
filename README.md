@@ -23,7 +23,7 @@ npm install -g ccremote
 bun install -g ccremote
 
 # Or for development/local linking
-git clone <repository>
+git clone https://github.com/generativereality/ccremote.git
 cd ccremote
 bun install
 bun run build

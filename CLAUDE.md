@@ -19,6 +19,13 @@ ccremote is a CLI tool that provides remote control for Claude Code sessions wit
 - `bun run check` - All checks (lint + typecheck + test + build)
 - `bun run release` - Full release process (all checks + version bump)
 
+### Build and Release
+
+- `bun run build` - Build distribution files with tsdown  
+- `bun run check` - Full validation (lint + typecheck + test + build)
+- `bun run release` - Complete release workflow (check + version bump with bumpp)
+- `npm publish` - Publish to npm registry (triggers prepack build + publint validation)
+
 ### Testing
 - Tests are located alongside source files using vitest's in-source testing
 - Use `import.meta.vitest` blocks for tests within source files
@@ -126,3 +133,54 @@ ccremote --help
 ```
 
 The symlink approach automatically uses the latest built version when you rebuild with `bun run build`.
+
+### Bundling Notes
+
+- PM2 is bundled with the distribution (included in `files` array)
+- PM2 binary is resolved at runtime from multiple possible locations
+- No external dependencies need to be installed when using ccremote in other projects
+
+## NPM Publishing Process
+
+### Prerequisites
+
+1. **NPM Account**: Ensure you're logged in to npm (`npm whoami`)
+2. **Repository Access**: Push access to the GitHub repository
+3. **Clean Working Directory**: All changes committed and pushed
+
+### Release Workflow
+
+```bash
+# 1. Run full release process (recommended)
+bun run release
+
+# This automatically:
+# - Runs lint, typecheck, tests, and build
+# - Prompts for version bump (patch/minor/major)
+# - Creates git tag and commit
+# - Updates CHANGELOG.md (if bumpp is configured for it)
+
+# 2. Publish to npm
+npm publish
+
+# This automatically:
+# - Runs `prepack` (builds distribution)
+# - Runs `prepublishOnly` (publint validation)  
+# - Publishes to npm registry
+# - Dependencies (including PM2) installed automatically by npm
+```
+
+### Manual Steps (if needed)
+
+```bash
+# Alternative: Step-by-step approach
+bun run check        # Validate everything
+bumpp                # Version bump with prompts
+npm publish          # Publish to registry
+```
+
+### Post-Release
+
+1. **Verify Publication**: Check package at `https://npmjs.com/package/ccremote`
+2. **Test Installation**: `npm install -g ccremote@latest` in clean environment
+3. **Update Documentation**: Ensure README reflects any new features
