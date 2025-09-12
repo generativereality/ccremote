@@ -1,7 +1,7 @@
 import type { DaemonConfig } from '../core/daemon.js';
+import { cancel, confirm, isCancel } from '@clack/prompts';
 import { consola } from 'consola';
 import { define } from 'gunshi';
-import { confirm, cancel, isCancel } from '@clack/prompts';
 import { loadConfig, validateConfig } from '../core/config.js';
 import { daemonManager } from '../core/daemon-manager.js';
 import { SessionManager } from '../core/session.js';
@@ -56,7 +56,7 @@ export const startCommand = define({
 				if (!initCommand) {
 					throw new Error('Init command not available');
 				}
-				
+
 				const ctx = {
 					values: { force: false },
 					name: 'init',
@@ -70,7 +70,7 @@ export const startCommand = define({
 					flags: { force: false },
 					params: {},
 					rest: [],
-					parent: null
+					parent: null,
 				};
 				await (initCommand as any).run(ctx as any);
 			}
@@ -86,7 +86,7 @@ export const startCommand = define({
 			consola.info('   2. ✅ Invited the bot to your Discord server with Send Messages permission');
 			consola.info('   3. ✅ The bot appears online in your server member list');
 			consola.info('');
-			
+
 			const botSetupComplete = await confirm({
 				message: 'Have you completed the Discord bot setup and verified the bot is online?',
 				initialValue: false,

@@ -51,6 +51,7 @@
     "consola": "^3.4.2",
     "discord.js": "^14.14.1",
     "eslint": "^9.33.0",
+    "eslint-plugin-format": "^1.0.1",
     "gunshi": "^0.26.3",
     "tsdown": "^0.14.1",
     "tsx": "^4.7.0",

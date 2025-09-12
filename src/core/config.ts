@@ -60,7 +60,7 @@ function loadEnvFiles(): void {
 	if (process.env.NODE_ENV === 'test' && process.env.SKIP_ENV_FILES) {
 		return;
 	}
-	
+
 	// Priority order for .env files
 	const envFiles = [
 		resolve(process.cwd(), 'ccremote.env'), // Project-specific ccremote.env
@@ -133,14 +133,14 @@ if (import.meta.vitest) {
 		beforeEach(() => {
 			// Clear environment
 			vi.resetModules();
-			
+
 			// Clear all CCREMOTE environment variables
 			for (const key in process.env) {
 				if (key.startsWith('CCREMOTE_')) {
 					delete process.env[key];
 				}
 			}
-			
+
 			// Skip env file loading during tests
 			process.env.NODE_ENV = 'test';
 			process.env.SKIP_ENV_FILES = 'true';

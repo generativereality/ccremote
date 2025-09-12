@@ -30,24 +30,28 @@ export class DaemonManager {
 	 */
 	async spawnDaemon(config: DaemonConfig): Promise<DaemonProcess> {
 		const pm2Name = `${config.sessionId}-daemon`;
-		
+
 		// Find daemon script - either in development or installed package
 		let daemonScript: string;
 		try {
 			// Try local development path first
 			daemonScript = join(process.cwd(), 'dist/daemon.js');
 			await fs.access(daemonScript);
-		} catch {
+		}
+		catch {
 			// Fallback to installed package path
 			daemonScript = join(import.meta.dirname, '../../dist/daemon.js');
 		}
-		
+
 		// Use direct PM2 command with environment variables - simple and reliable
 		// Don't specify log files to avoid race conditions - daemon handles its own logging
 		const pm2Args = [
-			'pm2', 'start', daemonScript,
-			'--name', pm2Name,
-			'--no-autorestart' // We'll handle restarts ourselves
+			'pm2',
+			'start',
+			daemonScript,
+			'--name',
+			pm2Name,
+			'--no-autorestart', // We'll handle restarts ourselves
 		];
 
 		// Start with PM2 using environment variables for config
@@ -59,7 +63,7 @@ export class DaemonManager {
 					...process.env,
 					NODE_ENV: 'production',
 					CCREMOTE_SESSION_ID: config.sessionId, // Pass session ID via environment
-				}
+				},
 			});
 
 			let stdout = '';
@@ -132,7 +136,7 @@ export class DaemonManager {
 				});
 
 				deleteProcess.on('close', async () => {
-					// Remove from tracking  
+					// Remove from tracking
 					this.daemons.delete(sessionId);
 					await this.saveDaemonPids();
 
@@ -188,8 +192,8 @@ export class DaemonManager {
 			const pids: Array<{ sessionId: string; pm2Id?: string; logFile: string; startTime: string }> = JSON.parse(data);
 
 			for (const pidInfo of pids) {
-				if (!pidInfo.pm2Id) continue; // Skip invalid entries
-				
+				if (!pidInfo.pm2Id) { continue; } // Skip invalid entries
+
 				try {
 					// Check if PM2 process exists
 					const checkProcess = spawn('npx', ['pm2', 'describe', pidInfo.pm2Id], {

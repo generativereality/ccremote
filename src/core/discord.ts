@@ -191,31 +191,32 @@ export class DiscordBot {
 		operation: () => Promise<T>,
 		operationName?: string,
 		maxRetries = 5,
-		baseDelay = 1000
+		baseDelay = 1000,
 	): Promise<T> {
 		let lastError: Error;
 
 		for (let attempt = 0; attempt < maxRetries; attempt++) {
 			try {
 				return await operation();
-			} catch (error) {
+			}
+			catch (error) {
 				lastError = error as Error;
 				const errorMessage = error instanceof Error ? error.message : String(error);
-				
+
 				// Check if this is a rate limit error
-				const isRateLimit = errorMessage.includes('too fast') || 
-								   errorMessage.includes('rate limit') ||
-								   errorMessage.includes('429');
+				const isRateLimit = errorMessage.includes('too fast')
+					|| errorMessage.includes('rate limit')
+					|| errorMessage.includes('429');
 
 				if (!isRateLimit || attempt === maxRetries - 1) {
 					throw error;
 				}
 
 				// Calculate delay with exponential backoff + jitter
-				const delay = baseDelay * Math.pow(2, attempt) + Math.random() * 1000;
-				
+				const delay = baseDelay * 2 ** attempt + Math.random() * 1000;
+
 				console.warn(`${operationName || 'Discord operation'} rate limited (attempt ${attempt + 1}/${maxRetries}), retrying in ${Math.round(delay)}ms: ${errorMessage}`);
-				
+
 				await new Promise(resolve => setTimeout(resolve, delay));
 			}
 		}

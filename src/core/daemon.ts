@@ -10,7 +10,7 @@
  * All output goes directly to session log files - no stdout/stderr pollution.
  */
 
-import type { MonitoringOptions, MonitorEvent } from './monitor.js';
+import type { MonitorEvent, MonitoringOptions } from './monitor.js';
 import { promises as fs } from 'node:fs';
 
 export type DaemonConfig = {
@@ -44,10 +44,11 @@ export class Daemon {
 	private async log(level: 'INFO' | 'WARN' | 'ERROR', message: string): Promise<void> {
 		const timestamp = new Date().toISOString();
 		const logEntry = `${timestamp} [DAEMON:${level}] ${message}\n`;
-		
+
 		try {
 			await fs.appendFile(this.logFile, logEntry);
-		} catch (error) {
+		}
+		catch (error) {
 			// Fallback to console if file write fails
 			console.error(`Failed to write to log file ${this.logFile}:`, error);
 			console.info(logEntry.trim());
@@ -65,7 +66,7 @@ export class Daemon {
 			// Ensure we're in the correct directory for Discord.js package resolution
 			// Since Discord.js looks for package.json in parent directories, we need to be in a dir with node_modules
 			const originalCwd = process.cwd();
-			
+
 			// Import managers here to avoid early Discord.js loading
 			const { SessionManager } = await import('./session.js');
 			const { TmuxManager } = await import('./tmux.js');
@@ -137,10 +138,10 @@ export class Daemon {
 						const sessionData = await this.sessionManager.getSession(sessionId);
 						if (sessionData) {
 							await this.tmuxManager.sendApprovalResponse(sessionData.tmuxSession, approved);
-							
+
 							// Update session status back to active
 							await this.sessionManager.updateSession(sessionId, { status: 'active' });
-							
+
 							await this.log('INFO', `Sent ${approved ? '1' : '2'} to tmux session ${sessionData.tmuxSession}`);
 						}
 					}
@@ -245,7 +246,7 @@ export class Daemon {
 export async function startDaemon(): Promise<void> {
 	try {
 		const sessionId = process.env.CCREMOTE_SESSION_ID;
-		
+
 		if (!sessionId) {
 			console.error('CCREMOTE_SESSION_ID environment variable is required');
 			process.exit(1);
@@ -254,7 +255,7 @@ export async function startDaemon(): Promise<void> {
 		// Load config from environment like any other ccremote process
 		const { loadConfig } = await import('./config.js');
 		const appConfig = await loadConfig();
-		
+
 		const config: DaemonConfig = {
 			sessionId,
 			logFile: `.ccremote/session-${sessionId}.log`,
@@ -265,9 +266,9 @@ export async function startDaemon(): Promise<void> {
 				pollInterval: appConfig.monitoringInterval,
 				maxRetries: appConfig.maxRetries,
 				autoRestart: appConfig.autoRestart,
-			}
+			},
 		};
-		
+
 		const daemon = new Daemon(config);
 		await daemon.start();
 	}
