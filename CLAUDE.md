@@ -103,3 +103,26 @@ CCREMOTE_AUTO_RESTART=true                     # Auto-restart on failure
 2. Run `bun run check` to verify types, run tests, lint etc
 3. Use `bun run dev` for local testing of CLI commands
 4. Build with `bun run build` before publishing
+
+## Global Development Installation
+
+To install ccremote globally for development and testing:
+
+```bash
+# Build the project
+bun run build
+
+# Option 1: Use bun link (creates global symlink)
+bun link
+
+# Option 2: Manual symlink (alternative approach)
+mkdir -p ~/bin
+ln -sf "$PWD/dist/index.js" ~/bin/ccremote
+echo 'export PATH="$HOME/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+
+# Test global installation
+ccremote --help
+```
+
+The symlink approach automatically uses the latest built version when you rebuild with `bun run build`.

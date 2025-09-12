@@ -22,6 +22,13 @@ npm install -g ccremote
 # Or with bun
 bun install -g ccremote
 
+# Or for development/local linking
+git clone <repository>
+cd ccremote
+bun install
+bun run build
+bun link  # Or: ln -sf "$PWD/dist/index.js" ~/bin/ccremote
+
 # Initialize configuration interactively
 ccremote init
 ```
