@@ -8,7 +8,8 @@
 import type { DaemonConfig } from './daemon.js';
 import { spawn } from 'node:child_process';
 import { promises as fs } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export type DaemonProcess = {
 	sessionId: string;
@@ -26,37 +27,110 @@ export class DaemonManager {
 	}
 
 	/**
+	 * Get the PM2 binary path from the bundled package
+	 */
+	private getPm2BinaryPath(): string {
+		// Get the directory where this file is located
+		const currentFileUrl = import.meta.url;
+		const currentFilePath = fileURLToPath(currentFileUrl);
+		const currentDir = dirname(currentFilePath);
+		
+		// Try to find PM2 in several locations
+		const possiblePaths = [
+			// In development: ccremote/src/core/daemon-manager.ts -> ccremote/node_modules/pm2/bin/pm2
+			join(currentDir, '../../node_modules/pm2/bin/pm2'),
+			// In bundled dist: ccremote/dist/daemon-manager.js -> ccremote/node_modules/pm2/bin/pm2
+			join(currentDir, '../node_modules/pm2/bin/pm2'),
+			// When installed via global symlink: resolve from symlink target
+			join(dirname(process.argv[1]), '../node_modules/pm2/bin/pm2'),
+			// When packaged: relative to package root
+			join(dirname(currentDir), 'node_modules/pm2/bin/pm2'),
+		];
+
+		// Test each path and return the first one that exists
+		for (const path of possiblePaths) {
+			try {
+				require('fs').accessSync(path, require('fs').constants.F_OK);
+				return path;
+			}
+			catch {
+				// Try next path
+			}
+		}
+
+		throw new Error('PM2 binary not found. Please ensure PM2 is properly installed.');
+	}
+
+	/**
+	 * Prepare PM2 command arguments and binary
+	 */
+	private preparePm2Command(args: string[]): { binary: string; args: string[] } {
+		const pm2Binary = this.getPm2BinaryPath();
+		
+		return {
+			binary: pm2Binary,
+			args: args
+		};
+	}
+
+	/**
+	 * Get the daemon script path
+	 */
+	private async getDaemonScriptPath(): Promise<string> {
+		// Get the directory where this file is located
+		const currentFileUrl = import.meta.url;
+		const currentFilePath = fileURLToPath(currentFileUrl);
+		const currentDir = dirname(currentFilePath);
+		
+		// Try different locations for the daemon script
+		const possiblePaths = [
+			// In development: ccremote/src/core/daemon-manager.ts -> ccremote/dist/daemon.js
+			join(currentDir, '../../dist/daemon.js'),
+			// In bundled dist: ccremote/dist/core/daemon-manager.js -> ccremote/dist/daemon.js  
+			join(currentDir, '../daemon.js'),
+			// As fallback, try the same directory
+			join(currentDir, 'daemon.js'),
+		];
+
+		for (const path of possiblePaths) {
+			try {
+				await fs.access(path);
+				return path;
+			}
+			catch {
+				// Try next path
+			}
+		}
+
+		throw new Error('Could not find daemon.js script');
+	}
+
+	/**
 	 * Spawn a new daemon process for a session using PM2
 	 */
 	async spawnDaemon(config: DaemonConfig): Promise<DaemonProcess> {
 		const pm2Name = `${config.sessionId}-daemon`;
 
-		// Find daemon script - either in development or installed package
-		let daemonScript: string;
-		try {
-			// Try local development path first
-			daemonScript = join(process.cwd(), 'dist/daemon.js');
-			await fs.access(daemonScript);
-		}
-		catch {
-			// Fallback to installed package path
-			daemonScript = join(import.meta.dirname, '../../dist/daemon.js');
-		}
-
-		// Use direct PM2 command with environment variables - simple and reliable
-		// Don't specify log files to avoid race conditions - daemon handles its own logging
-		const pm2Args = [
-			'pm2',
+		// Get the daemon script path
+		const daemonScript = await this.getDaemonScriptPath();
+		
+		// Prepare PM2 command with log redirection
+		const pm2Command = this.preparePm2Command([
 			'start',
 			daemonScript,
 			'--name',
 			pm2Name,
 			'--no-autorestart', // We'll handle restarts ourselves
-		];
+			'--output',
+			config.logFile, // Redirect stdout to daemon log file
+			'--error', 
+			config.logFile, // Redirect stderr to daemon log file
+			'--merge-logs', // Merge stdout and stderr into single file
+		]);
 
 		// Start with PM2 using environment variables for config
 		return new Promise((resolve, reject) => {
-			const pm2Process = spawn('npx', pm2Args, {
+			const pm2Process = spawn(pm2Command.binary, pm2Command.args, {
 				stdio: ['ignore', 'pipe', 'pipe'],
 				cwd: process.cwd(),
 				env: {
@@ -84,7 +158,8 @@ export class DaemonManager {
 				}
 
 				// Get process info from PM2
-				const listProcess = spawn('npx', ['pm2', 'list', pm2Name, '--format'], {
+				const listCommand = this.preparePm2Command(['list', pm2Name, '--format']);
+				const listProcess = spawn(listCommand.binary, listCommand.args, {
 					stdio: ['ignore', 'pipe', 'pipe'],
 				});
 
@@ -125,13 +200,15 @@ export class DaemonManager {
 		}
 
 		return new Promise((resolve) => {
-			const stopProcess = spawn('npx', ['pm2', 'stop', daemon.pm2Id], {
+			const stopCommand = this.preparePm2Command(['stop', daemon.pm2Id]);
+			const stopProcess = spawn(stopCommand.binary, stopCommand.args, {
 				stdio: 'ignore',
 			});
 
 			stopProcess.on('close', async (code) => {
 				// Delete the process from PM2
-				const deleteProcess = spawn('npx', ['pm2', 'delete', daemon.pm2Id], {
+				const deleteCommand = this.preparePm2Command(['delete', daemon.pm2Id]);
+				const deleteProcess = spawn(deleteCommand.binary, deleteCommand.args, {
 					stdio: 'ignore',
 				});
 
@@ -196,7 +273,8 @@ export class DaemonManager {
 
 				try {
 					// Check if PM2 process exists
-					const checkProcess = spawn('npx', ['pm2', 'describe', pidInfo.pm2Id], {
+					const describeCommand = this.preparePm2Command(['describe', pidInfo.pm2Id]);
+					const checkProcess = spawn(describeCommand.binary, describeCommand.args, {
 						stdio: ['ignore', 'pipe', 'ignore'],
 					});
 

@@ -20,7 +20,8 @@
   "types": "./dist/index.d.ts",
   "bin": "./dist/index.js",
   "files": [
-    "dist"
+    "dist",
+    "node_modules/pm2"
   ],
   "engines": {
     "node": ">=20.19.4"
@@ -48,19 +49,19 @@
     "@types/bun": "^1.2.20",
     "@types/node": "^20.11.16",
     "bumpp": "^10.2.3",
-    "consola": "^3.4.2",
-    "discord.js": "^14.14.1",
     "eslint": "^9.33.0",
     "eslint-plugin-format": "^1.0.1",
     "gunshi": "^0.26.3",
     "tsdown": "^0.14.1",
     "tsx": "^4.7.0",
     "typescript": "^5.3.3",
-    "vitest": "^3.2.4",
-    "zod": "^3.25.67"
+    "vitest": "^3.2.4"
   },
   "dependencies": {
+    "consola": "^3.4.2",
+    "discord.js": "^14.14.1",
     "dotenv": "^17.2.2",
-    "pm2": "^6.0.10"
+    "pm2": "^6.0.10",
+    "zod": "^3.25.67"
   }
 }
