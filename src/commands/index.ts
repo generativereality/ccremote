@@ -37,9 +37,9 @@ for (const [name, command] of subCommandUnion) {
 }
 
 /**
- * Default command when no subcommand is specified (defaults to list)
+ * Default command when no subcommand is specified (defaults to start)
  */
-const mainCommand = listCommand;
+const mainCommand = startCommand;
 
 export async function run(): Promise<void> {
 	await cli(process.argv.slice(2), mainCommand, {
