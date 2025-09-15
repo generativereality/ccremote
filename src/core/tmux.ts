@@ -21,11 +21,11 @@ export class TmuxManager {
 			const ccremoteConfig = `${process.env.HOME}/.ccremote/tmux.conf`;
 			const fs = await import('node:fs');
 			const hasConfig = fs.existsSync(ccremoteConfig);
-			
+
 			const createCommand = hasConfig
 				? `tmux new-session -d -s "${sessionName}" -c "${process.cwd()}"`
 				: `tmux new-session -d -s "${sessionName}" -c "${process.cwd()}" \\; set -g mouse on`;
-			
+
 			await execAsync(createCommand);
 
 			// Load ccremote config into the session if it exists

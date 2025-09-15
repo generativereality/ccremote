@@ -1,13 +1,13 @@
 import process from 'node:process';
 import { cli } from 'gunshi';
 import { description, name, version } from '../../package.json';
-import { cleanCommand } from './clean.js';
-import { initCommand } from './init.js';
-import { listCommand } from './list.js';
-import { setupTmuxCommand } from './setup-tmux.js';
-import { startCommand } from './start.js';
-import { statusCommand } from './status.js';
-import { stopCommand } from './stop.js';
+import { cleanCommand } from './clean.ts';
+import { initCommand } from './init.ts';
+import { listCommand } from './list.ts';
+import { setupTmuxCommand } from './setup-tmux.ts';
+import { startCommand } from './start.ts';
+import { statusCommand } from './status.ts';
+import { stopCommand } from './stop.ts';
 
 // Re-export all commands for easy importing
 export { cleanCommand, initCommand, listCommand, setupTmuxCommand, startCommand, statusCommand, stopCommand };

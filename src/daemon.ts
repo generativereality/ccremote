@@ -7,7 +7,7 @@
  * It runs completely independently with all output going to session log files.
  */
 
-import { startDaemon } from './core/daemon.js';
+import { startDaemon } from './core/daemon.ts';
 
 // If this module is run directly or through PM2, start the daemon
 // PM2 uses ProcessContainerFork.js wrapper, so we check if this is the main module

@@ -1,9 +1,9 @@
-import { existsSync, writeFileSync, readFileSync } from 'node:fs';
-import { cancel, confirm, intro, isCancel, outro, select } from '@clack/prompts';
+import { exec } from 'node:child_process';
+import { existsSync, writeFileSync } from 'node:fs';
+import { promisify } from 'node:util';
+import { cancel, confirm, intro, isCancel, outro } from '@clack/prompts';
 import { consola } from 'consola';
 import { define } from 'gunshi';
-import { exec } from 'node:child_process';
-import { promisify } from 'node:util';
 
 const execAsync = promisify(exec);
 
@@ -12,7 +12,8 @@ async function checkTmuxInstallation(): Promise<{ installed: boolean; version?: 
 		const { stdout } = await execAsync('tmux -V');
 		const version = stdout.trim();
 		return { installed: true, version };
-	} catch {
+	}
+	catch {
 		return { installed: false };
 	}
 }
@@ -21,14 +22,15 @@ async function checkHomebrewAvailable(): Promise<boolean> {
 	try {
 		await execAsync('brew --version');
 		return true;
-	} catch {
+	}
+	catch {
 		return false;
 	}
 }
 
 async function installOrUpgradeTmux(action: 'install' | 'upgrade'): Promise<boolean> {
 	const hasHomebrew = await checkHomebrewAvailable();
-	
+
 	if (!hasHomebrew) {
 		consola.warn('⚠️  Homebrew not found. Please install Homebrew first:');
 		consola.info('  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"');
@@ -45,7 +47,8 @@ async function installOrUpgradeTmux(action: 'install' | 'upgrade'): Promise<bool
 					consola.success('✅ Tmux is already up to date!');
 					return true;
 				}
-			} catch {
+			}
+			catch {
 				// If brew outdated fails, tmux might not be installed via brew or is up to date
 				consola.success('✅ Tmux appears to be up to date!');
 				return true;
@@ -55,12 +58,13 @@ async function installOrUpgradeTmux(action: 'install' | 'upgrade'): Promise<bool
 		consola.info(`📦 ${action === 'install' ? 'Installing' : 'Upgrading'} tmux via Homebrew...`);
 		const command = action === 'install' ? 'brew install tmux' : 'brew upgrade tmux';
 		await execAsync(command);
-		
+
 		// Check new version
 		const { version } = await checkTmuxInstallation();
 		consola.success(`✅ Tmux ${action === 'install' ? 'installed' : 'upgraded'} successfully: ${version}`);
 		return true;
-	} catch (error) {
+	}
+	catch (error) {
 		const errorMessage = error instanceof Error ? error.message : String(error);
 		if (action === 'upgrade' && errorMessage.includes('already up-to-date')) {
 			consola.success('✅ Tmux is already up to date!');
@@ -75,7 +79,7 @@ async function setupTmuxScrollOptimization(): Promise<void> {
 	// Create ccremote-specific tmux config directory
 	const ccremoteDir = `${process.env.HOME}/.ccremote`;
 	const ccremoteTmuxConfig = `${ccremoteDir}/tmux.conf`;
-	
+
 	// Ensure .ccremote directory exists
 	if (!existsSync(ccremoteDir)) {
 		await execAsync(`mkdir -p ${ccremoteDir}`);
@@ -115,7 +119,7 @@ export const setupTmuxCommand = define({
 	async run() {
 		intro('🔧 ccremote tmux setup');
 
-		// Show explanation 
+		// Show explanation
 		consola.info('');
 		consola.info('ccremote uses tmux to monitor and control Claude Code sessions remotely.');
 		consola.info('Unfortunately, there are some tradeoffs when running Claude Code inside tmux:');
@@ -125,15 +129,15 @@ export const setupTmuxCommand = define({
 		consola.info('  • Slightly different key bindings');
 		consola.info('  • Additional layer of complexity');
 		consola.info('');
-		consola.info("Let's optimize your tmux configuration to minimize these issues.");
+		consola.info('Let\'s optimize your tmux configuration to minimize these issues.');
 		consola.info('');
 
 		// Check current tmux installation
 		const tmuxStatus = await checkTmuxInstallation();
-		
+
 		if (tmuxStatus.installed) {
 			consola.info(`✅ Tmux is installed: ${tmuxStatus.version}`);
-			
+
 			// Check for updates first
 			const checkUpdates = await confirm({
 				message: 'Check if there\'s a more recent tmux version available?',
@@ -151,9 +155,10 @@ export const setupTmuxCommand = define({
 					consola.info('Continuing with current version...');
 				}
 			}
-		} else {
+		}
+		else {
 			consola.warn('⚠️  Tmux is not installed');
-			
+
 			const installChoice = await confirm({
 				message: 'Install tmux via Homebrew?',
 				initialValue: true,
@@ -186,7 +191,8 @@ export const setupTmuxCommand = define({
 		if (configureScrolling) {
 			consola.info('🎛️  Configuring tmux for better mouse scrolling...');
 			await setupTmuxScrollOptimization();
-		} else {
+		}
+		else {
 			consola.info('Skipping scroll optimization.');
 		}
 
@@ -196,10 +202,11 @@ export const setupTmuxCommand = define({
 			consola.info('1. ccremote sessions will now use the optimized config automatically');
 			consola.info('2. Your existing ~/.tmux.conf remains unchanged');
 			consola.info('3. Run: ccremote start (will use ~/.ccremote/tmux.conf)');
-		} else {
+		}
+		else {
 			consola.info('1. Run: ccremote start (will use standard tmux)');
 		}
-		
+
 		outro('✅ Tmux setup complete!');
 	},
 });

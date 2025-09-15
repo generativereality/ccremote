@@ -10,7 +10,7 @@
  * All output goes directly to session log files - no stdout/stderr pollution.
  */
 
-import type { MonitorEvent, MonitoringOptions } from './monitor.js';
+import type { MonitorEvent, MonitoringOptions } from './monitor.ts';
 
 export type DaemonConfig = {
 	sessionId: string;
@@ -43,7 +43,7 @@ export class Daemon {
 	private log(level: 'INFO' | 'WARN' | 'ERROR', message: string): void {
 		const timestamp = new Date().toISOString();
 		const logEntry = `${timestamp} [DAEMON:${level}] ${message}`;
-		
+
 		// PM2 now redirects console output to the log file
 		console.info(logEntry);
 	}
@@ -193,10 +193,10 @@ export class Daemon {
 				const tmuxExists = await this.tmuxManager.sessionExists(session.tmuxSession);
 				if (!tmuxExists) {
 					this.log('INFO', `Tmux session ${session.tmuxSession} ended, gracefully shutting down daemon`);
-					
+
 					// Update session status to ended
 					await this.sessionManager.updateSession(this.config.sessionId, { status: 'ended' });
-					
+
 					// Notify via Discord that session has ended
 					try {
 						await this.discordBot.sendNotification(this.config.sessionId, {
@@ -205,10 +205,11 @@ export class Daemon {
 							sessionName: session.name,
 							message: `Session **${session.name}** has ended. The tmux session was closed.`,
 						});
-					} catch (error) {
+					}
+					catch (error) {
 						this.log('ERROR', `Failed to send session end notification: ${error instanceof Error ? error.message : String(error)}`);
 					}
-					
+
 					break;
 				}
 

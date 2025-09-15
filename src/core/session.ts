@@ -1,4 +1,4 @@
-import type { SessionState } from '../types/index.js';
+import type { SessionState } from '../types/index.ts';
 import { randomBytes } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import { dirname } from 'node:path';

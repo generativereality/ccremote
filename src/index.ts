@@ -9,6 +9,6 @@
  * @module index
  */
 
-import { run } from './commands/index.js';
+import { run } from './commands/index.ts';
 
 await run();

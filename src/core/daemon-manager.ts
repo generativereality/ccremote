@@ -5,7 +5,7 @@
  * Each session gets its own daemon process that runs in the background.
  */
 
-import type { DaemonConfig } from './daemon.js';
+import type { DaemonConfig } from './daemon.ts';
 import { spawn } from 'node:child_process';
 import { promises as fs } from 'node:fs';
 import { dirname, join } from 'node:path';

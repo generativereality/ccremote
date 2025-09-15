@@ -1,8 +1,8 @@
-import type { DiscordBot } from './discord.js';
-import type { SessionManager } from './session.js';
-import type { TmuxManager } from './tmux.js';
+import type { DiscordBot } from './discord.ts';
+import type { SessionManager } from './session.ts';
+import type { TmuxManager } from './tmux.ts';
 import { EventEmitter } from 'node:events';
-import { logger } from './logger.js';
+import { logger } from './logger.ts';
 
 export type MonitoringOptions = {
 	pollInterval?: number; // milliseconds, default 2000
@@ -468,7 +468,7 @@ export class Monitor extends EventEmitter {
 
 	private async handleSessionEnded(sessionId: string): Promise<void> {
 		await this.stopMonitoring(sessionId);
-		// Don't update session status or send notification here - 
+		// Don't update session status or send notification here -
 		// the daemon's runLoop will handle this more gracefully
 	}
 

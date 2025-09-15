@@ -1,5 +1,5 @@
 import type { Message, TextChannel } from 'discord.js';
-import type { NotificationMessage } from '../types/index.js';
+import type { NotificationMessage } from '../types/index.ts';
 import { Client, GatewayIntentBits } from 'discord.js';
 
 export class DiscordBot {

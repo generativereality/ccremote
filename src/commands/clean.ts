@@ -1,11 +1,11 @@
-import type { SessionState } from '../types/index.js';
+import type { SessionState } from '../types/index.ts';
 import { promises as fs } from 'node:fs';
 import { basename, join } from 'node:path';
 import { consola } from 'consola';
 import { define } from 'gunshi';
-import { daemonManager } from '../core/daemon-manager.js';
-import { SessionManager } from '../core/session.js';
-import { TmuxManager } from '../core/tmux.js';
+import { daemonManager } from '../core/daemon-manager.ts';
+import { SessionManager } from '../core/session.ts';
+import { TmuxManager } from '../core/tmux.ts';
 
 export const cleanCommand = define({
 	name: 'clean',

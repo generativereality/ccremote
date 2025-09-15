@@ -1,13 +1,13 @@
-import type { DaemonConfig } from '../core/daemon.js';
+import type { DaemonConfig } from '../core/daemon.ts';
 import { cancel, confirm, isCancel } from '@clack/prompts';
 import { consola } from 'consola';
 import { define } from 'gunshi';
-import { loadConfig, validateConfig } from '../core/config.js';
-import { daemonManager } from '../core/daemon-manager.js';
-import { SessionManager } from '../core/session.js';
-import { TmuxManager } from '../core/tmux.js';
-import { cleanCommand } from './clean.js';
-import { initCommand } from './init.js';
+import { loadConfig, validateConfig } from '../core/config.ts';
+import { daemonManager } from '../core/daemon-manager.ts';
+import { SessionManager } from '../core/session.ts';
+import { TmuxManager } from '../core/tmux.ts';
+import { cleanCommand } from './clean.ts';
+import { initCommand } from './init.ts';
 
 export const startCommand = define({
 	name: 'start',

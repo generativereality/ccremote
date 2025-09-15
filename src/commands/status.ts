@@ -1,7 +1,7 @@
 import { consola } from 'consola';
 import { define } from 'gunshi';
-import { SessionManager } from '../core/session.js';
-import { TmuxManager } from '../core/tmux.js';
+import { SessionManager } from '../core/session.ts';
+import { TmuxManager } from '../core/tmux.ts';
 
 export const statusCommand = define({
 	name: 'status',
