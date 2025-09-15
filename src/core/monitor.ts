@@ -87,7 +87,7 @@ export class Monitor extends EventEmitter {
 		}, this.options.pollInterval);
 
 		this.monitoringIntervals.set(sessionId, interval);
-		await logger.info(`Started monitoring session: ${sessionId}`);
+		logger.info(`Started monitoring session: ${sessionId}`);
 	}
 
 	async stopMonitoring(sessionId: string): Promise<void> {
@@ -97,14 +97,14 @@ export class Monitor extends EventEmitter {
 			this.monitoringIntervals.delete(sessionId);
 		}
 		this.sessionStates.delete(sessionId);
-		await logger.info(`Stopped monitoring session: ${sessionId}`);
+		logger.info(`Stopped monitoring session: ${sessionId}`);
 	}
 
 	private async pollSession(sessionId: string): Promise<void> {
 		try {
 			const session = await this.sessionManager.getSession(sessionId);
 			if (!session) {
-				await logger.warn(`Session ${sessionId} not found, stopping monitoring`);
+				logger.warn(`Session ${sessionId} not found, stopping monitoring`);
 				await this.stopMonitoring(sessionId);
 				return;
 			}
@@ -112,7 +112,7 @@ export class Monitor extends EventEmitter {
 			// Check if tmux session still exists
 			const tmuxExists = await this.tmuxManager.sessionExists(session.tmuxSession);
 			if (!tmuxExists) {
-				await logger.info(`Tmux session ${session.tmuxSession} no longer exists`);
+				logger.info(`Tmux session ${session.tmuxSession} no longer exists`);
 				await this.handleSessionEnded(sessionId);
 				return;
 			}
@@ -122,7 +122,7 @@ export class Monitor extends EventEmitter {
 			if (sessionState?.scheduledResetTime) {
 				const now = new Date();
 				if (now >= sessionState.scheduledResetTime) {
-					await logger.info(`Scheduled reset time arrived, executing continuation for session ${sessionId}`);
+					logger.info(`Scheduled reset time arrived, executing continuation for session ${sessionId}`);
 					sessionState.scheduledResetTime = undefined;
 					await this.performAutoContinuation(sessionId);
 					return; // Continue normal monitoring on next poll
@@ -134,7 +134,7 @@ export class Monitor extends EventEmitter {
 			await this.analyzeOutput(sessionId, currentOutput);
 		}
 		catch (error) {
-			await logger.error(`Error polling session ${sessionId}: ${error}`);
+			logger.error(`Error polling session ${sessionId}: ${error}`);
 			await this.handlePollingError(sessionId, error);
 		}
 	}
@@ -188,11 +188,11 @@ export class Monitor extends EventEmitter {
 
 			if (timeSinceLastContinuation < CONTINUATION_COOLDOWN_MS) {
 				const remainingCooldown = Math.round((CONTINUATION_COOLDOWN_MS - timeSinceLastContinuation) / 1000);
-				await logger.info(`Usage limit detected but in cooldown period (${remainingCooldown}s remaining), skipping`);
+				logger.info(`Usage limit detected but in cooldown period (${remainingCooldown}s remaining), skipping`);
 				return;
 			}
 
-			await logger.info(`Usage limit detected for session ${sessionId}`);
+			logger.info(`Usage limit detected for session ${sessionId}`);
 			sessionState.limitDetectedAt = new Date();
 			sessionState.awaitingContinuation = true;
 
@@ -201,13 +201,13 @@ export class Monitor extends EventEmitter {
 
 		// Check for continuation readiness (after limit was detected)
 		if (sessionState.awaitingContinuation && this.patterns.continuationReady.test(output)) {
-			await logger.info(`Continuation ready detected for session ${sessionId}`);
+			logger.info(`Continuation ready detected for session ${sessionId}`);
 			await this.handleContinuationReady(sessionId, output);
 		}
 
 		// Check for Claude Code approval dialogs
 		if (this.detectApprovalDialog(output)) {
-			await logger.info(`Approval dialog detected for session ${sessionId}`);
+			logger.info(`Approval dialog detected for session ${sessionId}`);
 			await this.handleApprovalRequest(sessionId, output);
 		}
 	}
@@ -220,7 +220,7 @@ export class Monitor extends EventEmitter {
 
 		// Check if already scheduled to prevent duplicate notifications
 		if (sessionState.scheduledResetTime) {
-			await logger.info(`Already scheduled continuation for ${sessionState.scheduledResetTime.toLocaleString()}, skipping duplicate detection`);
+			logger.info(`Already scheduled continuation for ${sessionState.scheduledResetTime.toLocaleString()}, skipping duplicate detection`);
 			return;
 		}
 
@@ -238,7 +238,7 @@ export class Monitor extends EventEmitter {
 
 		if (continueResult.success) {
 			// Continuation succeeded immediately - limit has already reset
-			await logger.info(`Immediate continuation successful for session ${sessionId}`);
+			logger.info(`Immediate continuation successful for session ${sessionId}`);
 			sessionState.lastContinuationTime = new Date();
 			sessionState.awaitingContinuation = false;
 
@@ -259,7 +259,7 @@ export class Monitor extends EventEmitter {
 				const resetDateTime = await this.parseResetTime(resetTime);
 				if (resetDateTime) {
 					sessionState.scheduledResetTime = resetDateTime;
-					await logger.info(`Scheduled continuation for ${resetDateTime.toLocaleString()}`);
+					logger.info(`Scheduled continuation for ${resetDateTime.toLocaleString()}`);
 				}
 			}
 
@@ -359,14 +359,26 @@ export class Monitor extends EventEmitter {
 			const cleanLine = line.replace(/[│┃┆┊╎╏║╭╮╯╰┌┐└┘├┤┬┴┼─━┄┅┈┉═╔╗╚╝╠╣╦╩╬❯]/g, '').replace(/\s+/g, ' ').trim();
 
 			// Extract numbered options (e.g. "1. Yes", "2. Yes, allow all edits during this session (shift+tab)", "3. No, and tell Claude what to do differently (esc)")
-			const optionMatch = cleanLine.match(/^(\d+)\.\s*(.+?)(?:\s*\(([^)]+)\))?$/);
-			if (optionMatch) {
-				const [, numberStr, text, shortcut] = optionMatch;
-				const number = Number.parseInt(numberStr, 10);
+			// Use a simpler approach to avoid regex backtracking
+			const numberMatch = cleanLine.match(/^(\d+)\./);
+			if (numberMatch) {
+				const number = Number.parseInt(numberMatch[1], 10);
+				const afterNumber = cleanLine.slice(numberMatch[0].length).trim();
+
+				// Check for shortcut in parentheses at the end
+				const shortcutMatch = afterNumber.match(/\(([^)]+)\)$/);
+				let text = afterNumber;
+				let shortcut: string | undefined;
+
+				if (shortcutMatch) {
+					text = afterNumber.slice(0, -shortcutMatch[0].length).trim();
+					shortcut = shortcutMatch[1];
+				}
+
 				options.push({
 					number,
-					text: text.trim(),
-					shortcut: shortcut?.trim(),
+					text,
+					shortcut,
 				});
 			}
 
@@ -425,7 +437,7 @@ export class Monitor extends EventEmitter {
 		// Prevent duplicate notifications for the same approval
 		const approvalKey = approvalInfo.question;
 		if ((sessionState as any).lastApprovalQuestion === approvalKey) {
-			await logger.info('Skipping duplicate approval request');
+			logger.info('Skipping duplicate approval request');
 			return;
 		}
 		(sessionState as any).lastApprovalQuestion = approvalKey;
@@ -481,7 +493,7 @@ export class Monitor extends EventEmitter {
 		sessionState.retryCount++;
 
 		if (sessionState.retryCount >= this.options.maxRetries) {
-			await logger.error(`Max retries exceeded for session ${sessionId}, stopping monitoring`);
+			logger.error(`Max retries exceeded for session ${sessionId}, stopping monitoring`);
 			await this.stopMonitoring(sessionId);
 
 			const event: MonitorEvent = {
@@ -494,7 +506,7 @@ export class Monitor extends EventEmitter {
 			this.emit('error', event);
 		}
 		else {
-			await logger.warn(`Polling error for session ${sessionId}, retry ${sessionState.retryCount}/${this.options.maxRetries}`);
+			logger.warn(`Polling error for session ${sessionId}, retry ${sessionState.retryCount}/${this.options.maxRetries}`);
 		}
 	}
 
@@ -510,7 +522,7 @@ export class Monitor extends EventEmitter {
 				return;
 			}
 
-			await logger.info(`Performing auto-continuation for session ${sessionId}`);
+			logger.info(`Performing auto-continuation for session ${sessionId}`);
 
 			// Use the proper continuation command
 			await this.tmuxManager.sendContinueCommand(session.tmuxSession);
@@ -531,10 +543,10 @@ export class Monitor extends EventEmitter {
 				message: 'Session automatically continued after limit reset.',
 			});
 
-			await logger.info(`Auto-continuation completed for session ${sessionId}`);
+			logger.info(`Auto-continuation completed for session ${sessionId}`);
 		}
 		catch (error) {
-			await logger.error(`Auto-continuation failed for session ${sessionId}: ${error}`);
+			logger.error(`Auto-continuation failed for session ${sessionId}: ${error}`);
 		}
 	}
 
@@ -548,7 +560,7 @@ export class Monitor extends EventEmitter {
 				return { success: false };
 			}
 
-			await logger.info(`Trying immediate continuation for session ${sessionId}`);
+			logger.info(`Trying immediate continuation for session ${sessionId}`);
 
 			// Send continue command
 			await this.tmuxManager.sendContinueCommand(session.tmuxSession);
@@ -561,16 +573,16 @@ export class Monitor extends EventEmitter {
 			const stillHasLimitMessage = this.patterns.usageLimit.test(responseOutput);
 
 			if (stillHasLimitMessage) {
-				await logger.info('Immediate continuation failed - limit message still present');
+				logger.info('Immediate continuation failed - limit message still present');
 				return { success: false, response: responseOutput };
 			}
 			else {
-				await logger.info('Immediate continuation successful - no limit message in response');
+				logger.info('Immediate continuation successful - no limit message in response');
 				return { success: true, response: responseOutput };
 			}
 		}
 		catch (error) {
-			await logger.error(`Immediate continuation attempt failed: ${error}`);
+			logger.error(`Immediate continuation attempt failed: ${error}`);
 			return { success: false };
 		}
 	}
@@ -606,7 +618,7 @@ export class Monitor extends EventEmitter {
 			// Match patterns like "10pm", "2:30pm", "14:00", etc.
 			const timeMatch = timeStr.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/);
 			if (!timeMatch) {
-				await logger.warn(`No time match found in: ${timeStr}`);
+				logger.warn(`No time match found in: ${timeStr}`);
 				return null;
 			}
 
@@ -630,21 +642,21 @@ export class Monitor extends EventEmitter {
 			// If the calculated time is before now, add 24 hours (assume tomorrow)
 			if (resetTime <= now) {
 				resetTime.setDate(resetTime.getDate() + 1);
-				await logger.info(`Reset time passed, scheduling for tomorrow: ${resetTime.toLocaleString()}`);
+				logger.info(`Reset time passed, scheduling for tomorrow: ${resetTime.toLocaleString()}`);
 			}
 
 			// Sanity check: Claude windows are 5 hours, so reset time shouldn't be more than 5 hours from now
 			const hoursToReset = (resetTime.getTime() - now.getTime()) / (1000 * 60 * 60);
 			if (hoursToReset > 5) {
-				await logger.warn(`Sanity check failed: Reset time ${hoursToReset.toFixed(1)} hours away exceeds 5-hour window`);
+				logger.warn(`Sanity check failed: Reset time ${hoursToReset.toFixed(1)} hours away exceeds 5-hour window`);
 				return null;
 			}
 
-			await logger.info(`Parsed "${timeStr}" as ${resetTime.toLocaleString()}`);
+			logger.info(`Parsed "${timeStr}" as ${resetTime.toLocaleString()}`);
 			return resetTime;
 		}
 		catch (error) {
-			await logger.error(`Failed to parse reset time: ${error} for input: ${timeStr}`);
+			logger.error(`Failed to parse reset time: ${error} for input: ${timeStr}`);
 			return null;
 		}
 	}
@@ -694,20 +706,20 @@ if (import.meta.vitest) {
 
 		it('should detect usage limit patterns', () => {
 			const testOutput = '5-hour limit reached. Your limit resets at 3:45pm';
-			const patterns = (monitor as any).patterns as { usageLimit: RegExp };
+			const patterns = (monitor as Monitor & { [key: string]: any }).patterns as { usageLimit: RegExp };
 			expect(patterns.usageLimit.test(testOutput)).toBe(true);
 		});
 
 		it('should detect continuation ready patterns', () => {
 			const testOutput = 'Ready to continue...';
-			const patterns = (monitor as any).patterns as { continuationReady: RegExp };
+			const patterns = (monitor as Monitor & { [key: string]: any }).patterns as { continuationReady: RegExp };
 			expect(patterns.continuationReady.test(testOutput)).toBe(true);
 		});
 
 		it('should calculate new output correctly', () => {
 			const lastOutput = 'Hello world';
 			const currentOutput = 'Hello world\nNew line here';
-			const newOutput = (monitor as any).getNewOutput(lastOutput, currentOutput) as string;
+			const newOutput = (monitor as Monitor & { [key: string]: any }).getNewOutput(lastOutput, currentOutput);
 			expect(newOutput).toBe('\nNew line here');
 		});
 
@@ -772,32 +784,32 @@ Some command output
 More text here`;
 
 			it('should detect file edit approval dialog', () => {
-				const result = (monitor as any).detectApprovalDialog(tmuxEditFixture);
+				const result = (monitor as Monitor & { [key: string]: any }).detectApprovalDialog(tmuxEditFixture);
 				expect(result).toBe(true);
 			});
 
 			it('should detect proceed approval dialog', () => {
-				const result = (monitor as any).detectApprovalDialog(tmuxProceedFixture);
+				const result = (monitor as Monitor & { [key: string]: any }).detectApprovalDialog(tmuxProceedFixture);
 				expect(result).toBe(true);
 			});
 
 			it('should detect bash command approval dialog', () => {
-				const result = (monitor as any).detectApprovalDialog(tmuxBashFixture);
+				const result = (monitor as Monitor & { [key: string]: any }).detectApprovalDialog(tmuxBashFixture);
 				expect(result).toBe(true);
 			});
 
 			it('should detect file creation approval dialog', () => {
-				const result = (monitor as any).detectApprovalDialog(tmuxCreateFileFixture);
+				const result = (monitor as Monitor & { [key: string]: any }).detectApprovalDialog(tmuxCreateFileFixture);
 				expect(result).toBe(true);
 			});
 
 			it('should not detect non-approval output', () => {
-				const result = (monitor as any).detectApprovalDialog(noApprovalFixture);
+				const result = (monitor as Monitor & { [key: string]: any }).detectApprovalDialog(noApprovalFixture);
 				expect(result).toBe(false);
 			});
 
 			it('should extract approval info from file edit dialog', () => {
-				const result = (monitor as any).extractApprovalInfo(tmuxEditFixture);
+				const result = (monitor as Monitor & { [key: string]: any }).extractApprovalInfo(tmuxEditFixture);
 				expect(result.tool).toBe('Edit');
 				expect(result.action).toBe('Edit tmux.ts');
 				expect(result.question).toBe('Do you want to make this edit to tmux.ts?');
@@ -808,7 +820,7 @@ More text here`;
 			});
 
 			it('should extract approval info from proceed dialog', () => {
-				const result = (monitor as any).extractApprovalInfo(tmuxProceedFixture);
+				const result = (monitor as Monitor & { [key: string]: any }).extractApprovalInfo(tmuxProceedFixture);
 				expect(result.tool).toBe('Tool');
 				expect(result.action).toBe('Proceed with operation');
 				expect(result.question).toBe('Do you want to proceed?');
@@ -818,7 +830,7 @@ More text here`;
 			});
 
 			it('should extract approval info from bash command dialog', () => {
-				const result = (monitor as any).extractApprovalInfo(tmuxBashFixture);
+				const result = (monitor as Monitor & { [key: string]: any }).extractApprovalInfo(tmuxBashFixture);
 				expect(result.tool).toBe('Bash');
 				expect(result.action).toBe('Execute: vitest run src/core/monitor.ts');
 				expect(result.question).toBe('Do you want to proceed?');
@@ -829,7 +841,7 @@ More text here`;
 			});
 
 			it('should extract approval info from file creation dialog', () => {
-				const result = (monitor as any).extractApprovalInfo(tmuxCreateFileFixture);
+				const result = (monitor as Monitor & { [key: string]: any }).extractApprovalInfo(tmuxCreateFileFixture);
 				expect(result.tool).toBe('Write');
 				expect(result.action).toBe('Create debug-stop.js');
 				expect(result.question).toBe('Do you want to create debug-stop.js?');

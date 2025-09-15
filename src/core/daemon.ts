@@ -11,6 +11,12 @@
  */
 
 import type { MonitorEvent, MonitoringOptions } from './monitor.ts';
+import { promises as fs } from 'node:fs';
+import { dirname } from 'node:path';
+import { DiscordBot } from './discord.ts';
+import { Monitor } from './monitor.ts';
+import { SessionManager } from './session.ts';
+import { TmuxManager } from './tmux.ts';
 
 export type DaemonConfig = {
 	sessionId: string;
@@ -23,10 +29,10 @@ export type DaemonConfig = {
 };
 
 export class Daemon {
-	private sessionManager: any;
-	private tmuxManager: any;
-	private discordBot: any;
-	private monitor: any;
+	private sessionManager!: SessionManager;
+	private tmuxManager!: TmuxManager;
+	private discordBot!: DiscordBot;
+	private monitor!: Monitor;
 	private config: DaemonConfig;
 	private logFile: string;
 	private running = false;
@@ -57,19 +63,12 @@ export class Daemon {
 			this.log('INFO', `Working directory: ${process.cwd()}`);
 
 			// Ensure logs directory exists
-			const { promises: fs } = await import('node:fs');
-			const { dirname } = await import('node:path');
-			await fs.mkdir(dirname(this.logFile), { recursive: true });
+			const logDir = dirname(this.logFile);
+			await fs.mkdir(logDir, { recursive: true });
 
 			// Ensure we're in the correct directory for Discord.js package resolution
 			// Since Discord.js looks for package.json in parent directories, we need to be in a dir with node_modules
-			const originalCwd = process.cwd();
-
-			// Import managers here to avoid early Discord.js loading
-			const { SessionManager } = await import('./session.js');
-			const { TmuxManager } = await import('./tmux.js');
-			const { DiscordBot } = await import('./discord.js');
-			const { Monitor } = await import('./monitor.js');
+			// Note: We capture the original cwd for potential future use but don't currently restore it
 
 			// Initialize managers
 			this.sessionManager = new SessionManager();
@@ -268,7 +267,7 @@ export async function startDaemon(): Promise<void> {
 
 		// Load config from environment like any other ccremote process
 		const { loadConfig } = await import('./config.js');
-		const appConfig = await loadConfig();
+		const appConfig = loadConfig();
 
 		const config: DaemonConfig = {
 			sessionId,

@@ -7,7 +7,7 @@
 
 import type { DaemonConfig } from './daemon.ts';
 import { spawn } from 'node:child_process';
-import { promises as fs } from 'node:fs';
+import { accessSync, constants, promises as fs } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -50,7 +50,7 @@ export class DaemonManager {
 		// Test each path and return the first one that exists
 		for (const path of possiblePaths) {
 			try {
-				require('node:fs').accessSync(path, require('node:fs').constants.F_OK);
+				accessSync(path, constants.F_OK);
 				return path;
 			}
 			catch {
@@ -151,7 +151,7 @@ export class DaemonManager {
 				stderr += data.toString();
 			});
 
-			pm2Process.on('close', async (code) => {
+			pm2Process.on('close', (code) => {
 				if (code !== 0) {
 					reject(new Error(`PM2 start failed: ${stderr || stdout}`));
 					return;
@@ -163,12 +163,12 @@ export class DaemonManager {
 					stdio: ['ignore', 'pipe', 'pipe'],
 				});
 
-				let listOutput = '';
-				listProcess.stdout?.on('data', (data) => {
-					listOutput += data.toString();
+				// We don't need to capture output but keep the handler to prevent buffering issues
+				listProcess.stdout?.on('data', (_data) => {
+					// Output not needed for this operation
 				});
 
-				listProcess.on('close', async (listCode) => {
+				listProcess.on('close', (_listCode) => {
 					// Don't fail if we can't get exact PID - PM2 handles process management
 					// We'll use a placeholder PID and rely on PM2 for process tracking
 					const daemon: DaemonProcess = {
@@ -181,10 +181,8 @@ export class DaemonManager {
 					// Store in memory
 					this.daemons.set(config.sessionId, daemon);
 
-					// Persist to file
-					await this.saveDaemonPids();
-
-					resolve(daemon);
+					// Persist to file and resolve
+					this.saveDaemonPids().then(() => resolve(daemon)).catch(reject);
 				});
 			});
 		});
@@ -199,25 +197,23 @@ export class DaemonManager {
 			return false;
 		}
 
-		return new Promise((resolve) => {
+		return new Promise((resolve, reject) => {
 			const stopCommand = this.preparePm2Command(['stop', daemon.pm2Id]);
 			const stopProcess = spawn(stopCommand.binary, stopCommand.args, {
 				stdio: 'ignore',
 			});
 
-			stopProcess.on('close', async (code) => {
+			stopProcess.on('close', (_code) => {
 				// Delete the process from PM2
 				const deleteCommand = this.preparePm2Command(['delete', daemon.pm2Id]);
 				const deleteProcess = spawn(deleteCommand.binary, deleteCommand.args, {
 					stdio: 'ignore',
 				});
 
-				deleteProcess.on('close', async () => {
+				deleteProcess.on('close', () => {
 					// Remove from tracking
 					this.daemons.delete(sessionId);
-					await this.saveDaemonPids();
-
-					resolve(true);
+					this.saveDaemonPids().then(() => resolve(true)).catch(reject);
 				});
 			});
 		});
@@ -266,10 +262,12 @@ export class DaemonManager {
 	async loadDaemonPids(): Promise<void> {
 		try {
 			const data = await fs.readFile(this.daemonPidsFile, 'utf-8');
-			const pids: Array<{ sessionId: string; pm2Id?: string; logFile: string; startTime: string }> = JSON.parse(data);
+			const pids = JSON.parse(data) as Array<{ sessionId: string; pm2Id?: string; logFile: string; startTime: string }>;
 
 			for (const pidInfo of pids) {
-				if (!pidInfo.pm2Id) { continue; } // Skip invalid entries
+				if (!pidInfo.pm2Id) {
+					continue; // Skip invalid entries
+				}
 
 				try {
 					// Check if PM2 process exists

@@ -231,7 +231,7 @@ export class DiscordBot {
 			}
 		}
 
-		throw lastError!;
+		throw new Error(lastError || 'Maximum retry attempts exceeded');
 	}
 
 	async stop(): Promise<void> {

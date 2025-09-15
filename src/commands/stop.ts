@@ -52,8 +52,12 @@ export const stopCommand = define({
 
 			if ((tmuxActive || daemonRunning) && !force) {
 				consola.warn('Session is still active:');
-				if (tmuxActive) { consola.warn('   • Tmux session is running'); }
-				if (daemonRunning) { consola.warn('   • Daemon process is running'); }
+				if (tmuxActive) {
+					consola.warn('   • Tmux session is running');
+				}
+				if (daemonRunning) {
+					consola.warn('   • Daemon process is running');
+				}
 				consola.warn('   This will kill all components and any running Claude Code instance');
 				consola.warn('   Use --force to proceed or stop the session manually first');
 				process.exit(1);
