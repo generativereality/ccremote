@@ -56,6 +56,11 @@ export class Daemon {
 			this.log('INFO', `Daemon starting for session ${this.config.sessionId} (PID: ${process.pid})`);
 			this.log('INFO', `Working directory: ${process.cwd()}`);
 
+			// Ensure logs directory exists
+			const { promises: fs } = await import('node:fs');
+			const { dirname } = await import('node:path');
+			await fs.mkdir(dirname(this.logFile), { recursive: true });
+
 			// Ensure we're in the correct directory for Discord.js package resolution
 			// Since Discord.js looks for package.json in parent directories, we need to be in a dir with node_modules
 			const originalCwd = process.cwd();
@@ -266,7 +271,7 @@ export async function startDaemon(): Promise<void> {
 
 		const config: DaemonConfig = {
 			sessionId,
-			logFile: `.ccremote/session-${sessionId}.log`,
+			logFile: `.ccremote/logs/session-${sessionId}.log`,
 			discordBotToken: appConfig.discordBotToken,
 			discordOwnerId: appConfig.discordOwnerId,
 			discordAuthorizedUsers: appConfig.discordAuthorizedUsers,

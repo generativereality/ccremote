@@ -6,6 +6,7 @@ import { loadConfig, validateConfig } from '../core/config.js';
 import { daemonManager } from '../core/daemon-manager.js';
 import { SessionManager } from '../core/session.js';
 import { TmuxManager } from '../core/tmux.js';
+import { cleanCommand } from './clean.js';
 import { initCommand } from './init.js';
 
 export const startCommand = define({
@@ -116,6 +117,30 @@ export const startCommand = define({
 			}
 		}
 
+		// Run safe cleanup before starting new session
+		consola.info('🧹 Cleaning up dead sessions...');
+		try {
+			const cleanCtx = {
+				values: { 'dry-run': false },
+				name: 'clean',
+				description: 'Remove ended and dead sessions, archive log files',
+				locale: 'en',
+				env: process.env,
+				command: cleanCommand,
+				args: [],
+				raw: [],
+				rawArgs: {},
+				flags: { 'dry-run': false },
+				params: {},
+				rest: [],
+				parent: null,
+			};
+			await (cleanCommand as any).run(cleanCtx as any);
+		}
+		catch (cleanError) {
+			consola.warn('Cleanup warning (continuing anyway):', cleanError instanceof Error ? cleanError.message : cleanError);
+		}
+
 		try {
 			// Initialize managers (only what we need for setup)
 			const sessionManager = new SessionManager();
@@ -141,7 +166,12 @@ export const startCommand = define({
 
 			// Create session
 			const session = await sessionManager.createSession(name, channel);
-			const logFile = `.ccremote/session-${session.id}.log`;
+
+			// Ensure logs directory exists
+			const { promises: fs } = await import('node:fs');
+			const logFile = `.ccremote/logs/session-${session.id}.log`;
+			await fs.mkdir('.ccremote/logs', { recursive: true });
+
 			consola.success(`Created session: ${session.name} (${session.id})`);
 
 			// Check if tmux session already exists (cleanup from previous run)
@@ -190,7 +220,7 @@ export const startCommand = define({
 			// Set up graceful shutdown
 			process.on('SIGINT', () => {
 				consola.info('\nShutting down...');
-				void (async () => {
+				void (async (): Promise<void> => {
 					await daemonManager.stopDaemon(session.id);
 					process.exit(0);
 				})();
