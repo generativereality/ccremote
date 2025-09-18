@@ -167,10 +167,15 @@ export const startCommand = define({
 			// Create session
 			const session = await sessionManager.createSession(name, channel);
 
-			// Ensure logs directory exists
+			// Ensure logs directory exists - use global but project-specific subdirectory
 			const { promises: fs } = await import('node:fs');
-			const logFile = `.ccremote/logs/session-${session.id}.log`;
-			await fs.mkdir('.ccremote/logs', { recursive: true });
+			const { homedir } = await import('node:os');
+			const { join, basename } = await import('node:path');
+
+			const globalLogsDir = join(homedir(), '.ccremote', 'logs');
+			const projectName = basename(process.cwd());
+			const logFile = join(globalLogsDir, `${projectName}-${session.id}.log`);
+			await fs.mkdir(globalLogsDir, { recursive: true });
 
 			consola.success(`Created session: ${session.name} (${session.id})`);
 

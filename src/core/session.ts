@@ -1,13 +1,22 @@
 import type { SessionState } from '../types/index.ts';
 import { randomBytes } from 'node:crypto';
 import { promises as fs } from 'node:fs';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
+import { homedir } from 'node:os';
 
 export class SessionManager {
-	private sessionsFile = '.ccremote/sessions.json';
+	private globalConfigDir: string;
+	private sessionsFile: string;
 	private sessions: Map<string, SessionState> = new Map();
-	private lockFile = '.ccremote/sessions.lock';
+	private lockFile: string;
 	private writeLock: Promise<void> = Promise.resolve();
+
+	constructor() {
+		// Use global ccremote directory in user's home
+		this.globalConfigDir = join(homedir(), '.ccremote');
+		this.sessionsFile = join(this.globalConfigDir, 'sessions.json');
+		this.lockFile = join(this.globalConfigDir, 'sessions.lock');
+	}
 
 	async initialize(): Promise<void> {
 		await this.ensureConfigDir();
@@ -15,12 +24,11 @@ export class SessionManager {
 	}
 
 	private async ensureConfigDir(): Promise<void> {
-		const configDir = dirname(this.sessionsFile);
 		try {
-			await fs.access(configDir);
+			await fs.access(this.globalConfigDir);
 		}
 		catch {
-			await fs.mkdir(configDir, { recursive: true });
+			await fs.mkdir(this.globalConfigDir, { recursive: true });
 		}
 	}
 
@@ -31,8 +39,25 @@ export class SessionManager {
 				const sessionData = JSON.parse(data) as Record<string, unknown>;
 
 				this.sessions.clear();
-				for (const [id, session] of Object.entries(sessionData)) {
+				let needsMigration = false;
+
+				for (const [id, sessionRaw] of Object.entries(sessionData)) {
+					const session = sessionRaw as any;
+
+					// Migrate old sessions that don't have the new fields
+					if (!session.projectPath || !session.workingDirectory) {
+						// Mark legacy sessions as belonging to ccremote project for backwards compatibility
+						session.projectPath = session.projectPath || '/Users/fredrik.wollsen/Dev/ccremote';
+						session.workingDirectory = session.workingDirectory || '/Users/fredrik.wollsen/Dev/ccremote';
+						needsMigration = true;
+					}
+
 					this.sessions.set(id, session as SessionState);
+				}
+
+				// Save migrated data if needed
+				if (needsMigration) {
+					await this.writeSessionsToFile();
 				}
 			}
 			catch {
@@ -140,6 +165,8 @@ export class SessionManager {
 			status: 'active',
 			created: new Date().toISOString(),
 			lastActivity: new Date().toISOString(),
+			projectPath: process.cwd(), // Current working directory as project identifier
+			workingDirectory: process.cwd(),
 		};
 
 		this.sessions.set(sessionId, session);
@@ -150,6 +177,13 @@ export class SessionManager {
 
 	async listSessions(): Promise<SessionState[]> {
 		return Array.from(this.sessions.values());
+	}
+
+	async listSessionsForProject(projectPath?: string): Promise<SessionState[]> {
+		const targetPath = projectPath || process.cwd();
+		return Array.from(this.sessions.values()).filter(session =>
+			session.projectPath === targetPath
+		);
 	}
 
 	async getSession(id: string): Promise<SessionState | null> {

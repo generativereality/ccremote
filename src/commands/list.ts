@@ -6,8 +6,15 @@ import { TmuxManager } from '../core/tmux.ts';
 
 export const listCommand = define({
 	name: 'list',
-	description: 'List all ccremote sessions',
-	async run() {
+	description: 'List ccremote sessions for current project',
+	args: {
+		all: {
+			type: 'boolean',
+			description: 'Show sessions from all projects',
+		},
+	},
+	async run(ctx) {
+		const { all } = ctx.values;
 		try {
 			const sessionManager = new SessionManager();
 			const tmuxManager = new TmuxManager();
@@ -15,16 +22,25 @@ export const listCommand = define({
 			await sessionManager.initialize();
 			await daemonManager.loadDaemonPids();
 
-			const sessions = await sessionManager.listSessions();
+			const sessions = all ? await sessionManager.listSessions() : await sessionManager.listSessionsForProject();
 			const activeTmuxSessions = await tmuxManager.listSessions();
 
 			if (sessions.length === 0) {
-				consola.info('No sessions found.');
+				if (all) {
+					consola.info('No sessions found globally.');
+				} else {
+					consola.info('No sessions found for current project.');
+					consola.info('Use --all to see sessions from all projects.');
+				}
 				consola.info('Create a session with: ccremote start');
 				return;
 			}
 
-			consola.info('ccremote Sessions:');
+			if (all) {
+				consola.info('All ccremote Sessions:');
+			} else {
+				consola.info(`ccremote Sessions for ${process.cwd()}:`);
+			}
 			consola.info('');
 
 			for (const session of sessions) {
@@ -38,6 +54,7 @@ export const listCommand = define({
 
 				consola.info(`${statusIcon} ${session.name} (${session.id})`);
 				consola.info(`   Status: ${session.status}`);
+				consola.info(`   Project: ${session.projectPath || 'Unknown'}`);
 				consola.info(`   Tmux: ${session.tmuxSession} ${tmuxIcon}`);
 				consola.info(`   Daemon: ${daemon ? `PM2 ${daemon.pm2Id}` : 'Not running'} ${daemonIcon}`);
 				consola.info(`   Discord: ${session.channelId || 'Not assigned'}`);

@@ -6,6 +6,8 @@ export type SessionState = {
 	status: 'active' | 'waiting' | 'error' | 'waiting_approval' | 'ended';
 	created: string;
 	lastActivity: string;
+	projectPath: string; // Track which project this session belongs to
+	workingDirectory: string; // Current working directory when session was created
 };
 
 export type LimitInfo = {

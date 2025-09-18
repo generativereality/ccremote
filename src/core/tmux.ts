@@ -111,11 +111,20 @@ export class TmuxManager {
 		}
 	}
 
-	async listSessions(): Promise<string[]> {
+	async listSessions(): Promise<Array<{ name: string; created: string; windows: number }>> {
 		try {
-			const command = 'tmux list-sessions -F "#{session_name}"';
+			const command = 'tmux list-sessions -F "#{session_name},#{session_created},#{session_windows}"';
 			const { stdout } = await execAsync(command);
-			return stdout.trim().split('\n').filter(name => name.length > 0);
+			return stdout.trim().split('\n')
+				.filter(line => line.length > 0)
+				.map(line => {
+					const [name, created, windows] = line.split(',');
+					return {
+						name,
+						created: new Date(Number(created) * 1000).toISOString(),
+						windows: Number.parseInt(windows, 10),
+					};
+				});
 		}
 		catch {
 			return [];

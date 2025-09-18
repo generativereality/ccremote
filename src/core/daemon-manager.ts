@@ -9,6 +9,7 @@ import type { DaemonConfig } from './daemon.ts';
 import { spawn } from 'node:child_process';
 import { accessSync, constants, promises as fs } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 export type DaemonProcess = {
@@ -20,10 +21,13 @@ export type DaemonProcess = {
 
 export class DaemonManager {
 	private daemons = new Map<string, DaemonProcess>();
+	private globalConfigDir: string;
 	private daemonPidsFile: string;
 
 	constructor() {
-		this.daemonPidsFile = join(process.cwd(), '.ccremote', 'daemon-pids.json');
+		// Use global ccremote directory in user's home
+		this.globalConfigDir = join(homedir(), '.ccremote');
+		this.daemonPidsFile = join(this.globalConfigDir, 'daemon-pids.json');
 	}
 
 	/**
