@@ -203,7 +203,7 @@ export class DiscordBot {
 	async createOrGetChannel(sessionId: string, sessionName: string): Promise<string> {
 		console.info(`[DISCORD] createOrGetChannel called for session: ${sessionId}, name: ${sessionName}`);
 
-		// Check if we already have a channel for this session
+		// Check if we already have a channel for this session ID
 		const existingChannelId = this.sessionChannelMap.get(sessionId);
 		if (existingChannelId) {
 			console.info(`[DISCORD] Found existing channel mapping: ${existingChannelId}`);
@@ -222,6 +222,37 @@ export class DiscordBot {
 		if (!this.guildId) {
 			console.warn('[DISCORD] No guild available, falling back to DM');
 			return this.createDMChannel(sessionId, sessionName);
+		}
+
+		// Check if a channel with this session name already exists in the guild
+		const channelName = `ccremote-${sessionName.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`;
+		console.info(`[DISCORD] Checking for existing channel with name: ${channelName}`);
+
+		try {
+			const guild = await this.client.guilds.fetch(this.guildId);
+			if (guild) {
+				// Look for existing channel by name
+				const existingChannel = guild.channels.cache.find(
+					(channel) => channel.name === channelName && channel.isTextBased()
+				);
+
+				if (existingChannel) {
+					console.info(`[DISCORD] Found existing channel by name: ${existingChannel.id} (${channelName})`);
+					// Update our session mapping to use this existing channel
+					this.sessionChannelMap.set(sessionId, existingChannel.id);
+					this.channelSessionMap.set(existingChannel.id, sessionId);
+
+					// Send notification that session is reusing existing channel
+					if (existingChannel.isTextBased()) {
+						await existingChannel.send(`🔄 **ccremote Session Resumed**\nSession: ${sessionName} (${sessionId})\n\nReusing existing channel for this session.`);
+					}
+
+					return existingChannel.id;
+				}
+			}
+		}
+		catch (error) {
+			console.warn(`[DISCORD] Error checking for existing channel: ${error}`);
 		}
 
 		console.info(`[DISCORD] Creating new channel in guild: ${this.guildId}`);
