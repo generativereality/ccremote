@@ -31,6 +31,9 @@ export const cleanCommand = define({
 			const tmuxManager = new TmuxManager();
 			await sessionManager.initialize();
 
+			// Ensure daemon manager is fully initialized
+			await daemonManager.ensureInitialized();
+
 			// Get all sessions
 			const sessions = await sessionManager.listSessions();
 			const cleanupSessions: SessionState[] = [];

@@ -199,6 +199,51 @@ export class DiscordBot {
 			// Create a private text channel named after the session
 			const channelName = `ccremote-${sessionName.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`;
 
+			// First, fetch all authorized users to ensure they're in cache
+			const validUserOverwrites: Array<{
+				id: string;
+				allow: ('ViewChannel' | 'SendMessages' | 'ReadMessageHistory')[];
+			}> = [];
+
+			// Always include owner
+			try {
+				await this.client.users.fetch(this.ownerId);
+				// Also check if user is in the guild (for better error handling)
+				try {
+					await guild.members.fetch(this.ownerId);
+				} catch {
+					console.warn(`Owner ${this.ownerId} is not a member of guild ${guild.name}, but proceeding anyway`);
+				}
+				validUserOverwrites.push({
+					id: this.ownerId,
+					allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'],
+				});
+			} catch (error) {
+				console.warn(`Could not fetch owner user ${this.ownerId}:`, error);
+			}
+
+			// Try to fetch and add other authorized users
+			for (const userId of this.authorizedUsers) {
+				if (userId !== this.ownerId) {
+					try {
+						await this.client.users.fetch(userId);
+						// Also check if user is in the guild
+						try {
+							await guild.members.fetch(userId);
+						} catch {
+							console.warn(`User ${userId} is not a member of guild ${guild.name}, skipping`);
+							continue; // Skip this user if they're not in the guild
+						}
+						validUserOverwrites.push({
+							id: userId,
+							allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'],
+						});
+					} catch (error) {
+						console.warn(`Could not fetch authorized user ${userId}:`, error);
+					}
+				}
+			}
+
 			const channel = await guild.channels.create({
 				name: channelName,
 				type: ChannelType.GuildText,
@@ -207,17 +252,7 @@ export class DiscordBot {
 						id: guild.roles.everyone.id,
 						deny: ['ViewChannel'], // Hide from everyone
 					},
-					{
-						id: this.ownerId,
-						allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'], // Allow owner
-					},
-					// Allow other authorized users
-					...this.authorizedUsers
-						.filter(userId => userId !== this.ownerId)
-						.map(userId => ({
-							id: userId,
-							allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'] as const,
-						})),
+					...validUserOverwrites,
 				],
 			});
 
@@ -272,18 +307,32 @@ export class DiscordBot {
 				await channel.setName(archivedName);
 
 				// Remove send permissions for authorized users, but keep view permissions for history
-				const permissionUpdates = this.authorizedUsers.map(userId => ({
-					id: userId,
-					allow: ['ViewChannel', 'ReadMessageHistory'] as const,
-					deny: ['SendMessages'] as const,
-				}));
+				const validPermissionUpdates: Array<{
+					id: string;
+					allow: ('ViewChannel' | 'ReadMessageHistory')[];
+					deny: ('SendMessages')[];
+				}> = [];
+
+				// Fetch authorized users and build permission updates
+				for (const userId of this.authorizedUsers) {
+					try {
+						await this.client.users.fetch(userId);
+						validPermissionUpdates.push({
+							id: userId,
+							allow: ['ViewChannel', 'ReadMessageHistory'],
+							deny: ['SendMessages'],
+						});
+					} catch (error) {
+						console.warn(`Could not fetch user ${userId} during cleanup:`, error);
+					}
+				}
 
 				await channel.permissionOverwrites.set([
 					{
 						id: channel.guild.roles.everyone.id,
 						deny: ['ViewChannel'],
 					},
-					...permissionUpdates,
+					...validPermissionUpdates,
 				]);
 			}
 		}

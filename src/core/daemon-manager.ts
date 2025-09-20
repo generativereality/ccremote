@@ -23,11 +23,27 @@ export class DaemonManager {
 	private daemons = new Map<string, DaemonProcess>();
 	private globalConfigDir: string;
 	private daemonPidsFile: string;
+	private initPromise: Promise<void> | null = null;
 
 	constructor() {
 		// Use global ccremote directory in user's home
 		this.globalConfigDir = join(homedir(), '.ccremote');
 		this.daemonPidsFile = join(this.globalConfigDir, 'daemon-pids.json');
+
+		// Initialize by loading existing daemons
+		this.initPromise = this.loadDaemonPids().catch((error) => {
+			console.warn('Failed to load existing daemon PIDs on startup:', error instanceof Error ? error.message : error);
+		});
+	}
+
+	/**
+	 * Ensure the daemon manager is fully initialized
+	 */
+	async ensureInitialized(): Promise<void> {
+		if (this.initPromise) {
+			await this.initPromise;
+			this.initPromise = null;
+		}
 	}
 
 	/**
@@ -114,6 +130,11 @@ export class DaemonManager {
 	 */
 	async spawnDaemon(config: DaemonConfig): Promise<DaemonProcess> {
 		const pm2Name = `${config.sessionId}-daemon`;
+
+		// Check if a process with this name already exists and clean it up
+		if (await this.checkPm2ProcessExists(pm2Name)) {
+			await this.forceStopPm2Process(pm2Name);
+		}
 
 		// Get the daemon script path
 		const daemonScript = await this.getDaemonScriptPath();
@@ -268,38 +289,118 @@ export class DaemonManager {
 			const data = await fs.readFile(this.daemonPidsFile, 'utf-8');
 			const pids = JSON.parse(data) as Array<{ sessionId: string; pm2Id?: string; logFile: string; startTime: string }>;
 
-			for (const pidInfo of pids) {
+			// Check which PM2 processes actually exist and load them
+			const loadPromises = pids.map(async (pidInfo) => {
 				if (!pidInfo.pm2Id) {
-					continue; // Skip invalid entries
+					return; // Skip invalid entries
 				}
 
 				try {
-					// Check if PM2 process exists
-					const describeCommand = this.preparePm2Command(['describe', pidInfo.pm2Id]);
-					const checkProcess = spawn(describeCommand.binary, describeCommand.args, {
-						stdio: ['ignore', 'pipe', 'ignore'],
-					});
-
-					checkProcess.on('close', (code) => {
-						if (code === 0) {
-							// PM2 process exists - recreate daemon entry
-							this.daemons.set(pidInfo.sessionId, {
-								sessionId: pidInfo.sessionId,
-								pm2Id: pidInfo.pm2Id!,
-								logFile: pidInfo.logFile,
-								startTime: new Date(pidInfo.startTime),
-							});
-						}
-					});
+					// Check if PM2 process exists synchronously
+					const exists = await this.checkPm2ProcessExists(pidInfo.pm2Id);
+					if (exists) {
+						// PM2 process exists - recreate daemon entry
+						this.daemons.set(pidInfo.sessionId, {
+							sessionId: pidInfo.sessionId,
+							pm2Id: pidInfo.pm2Id,
+							logFile: pidInfo.logFile,
+							startTime: new Date(pidInfo.startTime),
+						});
+					}
 				}
 				catch {
 					// Process doesn't exist, skip it
 				}
-			}
+			});
+
+			await Promise.all(loadPromises);
 		}
 		catch {
 			// File doesn't exist or is invalid, start fresh
 		}
+	}
+
+	/**
+	 * Check if a PM2 process exists
+	 */
+	private async checkPm2ProcessExists(pm2Id: string): Promise<boolean> {
+		return new Promise((resolve) => {
+			try {
+				const describeCommand = this.preparePm2Command(['describe', pm2Id]);
+				const checkProcess = spawn(describeCommand.binary, describeCommand.args, {
+					stdio: ['ignore', 'pipe', 'pipe'],
+				});
+
+				checkProcess.on('close', (code) => {
+					resolve(code === 0);
+				});
+
+				checkProcess.on('error', () => {
+					resolve(false);
+				});
+			}
+			catch {
+				resolve(false);
+			}
+		});
+	}
+
+	/**
+	 * Force stop and delete a PM2 process by name
+	 */
+	private async forceStopPm2Process(pm2Name: string): Promise<void> {
+		return new Promise((resolve) => {
+			// First try to stop the process
+			const stopCommand = this.preparePm2Command(['stop', pm2Name]);
+			const stopProcess = spawn(stopCommand.binary, stopCommand.args, {
+				stdio: ['ignore', 'pipe', 'pipe'],
+			});
+
+			let stopError = '';
+			stopProcess.stderr?.on('data', (data) => {
+				stopError += data.toString();
+			});
+
+			stopProcess.on('close', (_stopCode) => {
+				// Whether stop succeeded or failed, try to delete the process
+				const deleteCommand = this.preparePm2Command(['delete', pm2Name]);
+				const deleteProcess = spawn(deleteCommand.binary, deleteCommand.args, {
+					stdio: ['ignore', 'pipe', 'pipe'],
+				});
+
+				let deleteError = '';
+				deleteProcess.stderr?.on('data', (data) => {
+					deleteError += data.toString();
+				});
+
+				deleteProcess.on('close', (deleteCode) => {
+					if (deleteCode === 0) {
+						// Successfully deleted
+						resolve();
+					} else {
+						// Failed to delete, but don't fail the operation - the process might not exist
+						console.warn(`Failed to force-delete PM2 process ${pm2Name}: ${deleteError}`);
+						resolve();
+					}
+				});
+
+				deleteProcess.on('error', (error) => {
+					console.warn(`Error deleting PM2 process ${pm2Name}:`, error.message);
+					resolve(); // Don't fail the operation
+				});
+			});
+
+			stopProcess.on('error', (error) => {
+				console.warn(`Error stopping PM2 process ${pm2Name}:`, error.message);
+				// Still try to delete
+				const deleteCommand = this.preparePm2Command(['delete', pm2Name]);
+				const deleteProcess = spawn(deleteCommand.binary, deleteCommand.args, {
+					stdio: 'ignore',
+				});
+				deleteProcess.on('close', () => resolve());
+				deleteProcess.on('error', () => resolve());
+			});
+		});
 	}
 
 	/**
