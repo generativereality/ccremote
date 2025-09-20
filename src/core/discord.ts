@@ -1,6 +1,6 @@
 import type { Message, TextChannel } from 'discord.js';
 import type { NotificationMessage } from '../types/index.ts';
-import { Client, GatewayIntentBits } from 'discord.js';
+import { ChannelType, Client, GatewayIntentBits } from 'discord.js';
 
 export class DiscordBot {
 	private client: Client;
@@ -8,6 +8,7 @@ export class DiscordBot {
 	private ownerId: string = '';
 	private sessionChannelMap = new Map<string, string>(); // sessionId -> channelId
 	private channelSessionMap = new Map<string, string>(); // channelId -> sessionId
+	private guildId: string | null = null; // Store the guild where channels should be created
 	private isReady = false;
 
 	constructor() {
@@ -33,7 +34,15 @@ export class DiscordBot {
 		return new Promise((resolve) => {
 			this.client.once('clientReady', () => {
 				this.isReady = true;
-				console.info(`Discord bot logged in as ${this.client.user?.tag}`);
+				// Find the first guild the bot is in to create channels
+				const guild = this.client.guilds.cache.first();
+				if (guild) {
+					this.guildId = guild.id;
+					console.info(`Discord bot logged in as ${this.client.user?.tag} in guild: ${guild.name}`);
+				}
+				else {
+					console.warn('Discord bot not in any guilds - cannot create channels');
+				}
 				resolve();
 			});
 		});
@@ -117,6 +126,14 @@ export class DiscordBot {
 
 				const message = this.formatNotification(notification);
 				await channel.send(message);
+
+				// If this is a session_ended notification, clean up the channel
+				if (notification.type === 'session_ended') {
+					// Clean up after a short delay to ensure the message is sent
+					setTimeout(() => {
+						void this.cleanupSessionChannel(sessionId);
+					}, 2000);
+				}
 			}, 'send Discord notification');
 		}
 		catch (error) {
@@ -139,7 +156,7 @@ export class DiscordBot {
 			case 'approval': {
 				const toolName = metadata?.toolName || 'unknown';
 				const command = metadata?.command || '';
-				return `⚠️ **${sessionName}** - Approval Required\n🔧 Tool: ${toolName}\n\n${message}\n\n${command ? `\`\`\`${command}\`\`\`` : ''}\n\nReply with **approve** or **deny**`;
+				return `⚠️ **${sessionName}** - Approval Required\n🔧 Tool: ${toolName}\n\n${message}\n\n${command ? `\`\`\`${command}\`\`\`` : ''}`;
 			}
 
 			case 'error':
@@ -154,9 +171,69 @@ export class DiscordBot {
 	}
 
 	async createOrGetChannel(sessionId: string, sessionName: string): Promise<string> {
-		// For now, we'll use DMs with the owner
-		// In the future, this could create private channels or use existing ones
+		// Check if we already have a channel for this session
+		const existingChannelId = this.sessionChannelMap.get(sessionId);
+		if (existingChannelId) {
+			try {
+				const channel = await this.client.channels.fetch(existingChannelId);
+				if (channel) {
+					return existingChannelId;
+				}
+			}
+			catch {
+				// Channel doesn't exist anymore, continue to create new one
+			}
+		}
 
+		if (!this.guildId) {
+			console.warn('No guild available, falling back to DM');
+			return this.createDMChannel(sessionId, sessionName);
+		}
+
+		return this.withExponentialBackoff(async () => {
+			const guild = await this.client.guilds.fetch(this.guildId!);
+			if (!guild) {
+				throw new Error(`Guild ${this.guildId} not found`);
+			}
+
+			// Create a private text channel named after the session
+			const channelName = `ccremote-${sessionName.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`;
+
+			const channel = await guild.channels.create({
+				name: channelName,
+				type: ChannelType.GuildText,
+				permissionOverwrites: [
+					{
+						id: guild.roles.everyone.id,
+						deny: ['ViewChannel'], // Hide from everyone
+					},
+					{
+						id: this.ownerId,
+						allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'], // Allow owner
+					},
+					// Allow other authorized users
+					...this.authorizedUsers
+						.filter(userId => userId !== this.ownerId)
+						.map(userId => ({
+							id: userId,
+							allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'] as const,
+						})),
+				],
+			});
+
+			this.sessionChannelMap.set(sessionId, channel.id);
+			this.channelSessionMap.set(channel.id, sessionId);
+
+			// Send initial message with retry
+			await this.withExponentialBackoff(async () => {
+				await channel.send(`🚀 **ccremote Session Started**\nSession: ${sessionName} (${sessionId})\n\nI'll send notifications for this session here. This channel is private and only visible to authorized users.`);
+			});
+
+			return channel.id;
+		}, 'create Discord channel');
+	}
+
+	private async createDMChannel(sessionId: string, sessionName: string): Promise<string> {
 		return this.withExponentialBackoff(async () => {
 			const owner = await this.client.users.fetch(this.ownerId);
 			const dmChannel = await owner.createDM();
@@ -166,16 +243,58 @@ export class DiscordBot {
 
 			// Send initial message with retry
 			await this.withExponentialBackoff(async () => {
-				await dmChannel.send(`🚀 **ccremote Session Started**\nSession: ${sessionName} (${sessionId})\n\nI'll send notifications for this session here.`);
+				await dmChannel.send(`🚀 **ccremote Session Started**\nSession: ${sessionName} (${sessionId})\n\nI'll send notifications for this session here. (Using DM as fallback - no guild available)`);
 			});
 
 			return dmChannel.id;
-		}, 'create Discord channel');
+		}, 'create Discord DM channel');
 	}
 
 	async assignChannelToSession(sessionId: string, channelId: string): Promise<void> {
 		this.sessionChannelMap.set(sessionId, channelId);
 		this.channelSessionMap.set(channelId, sessionId);
+	}
+
+	async cleanupSessionChannel(sessionId: string): Promise<void> {
+		const channelId = this.sessionChannelMap.get(sessionId);
+		if (!channelId) {
+			return;
+		}
+
+		try {
+			const channel = await this.client.channels.fetch(channelId) as TextChannel;
+			if (channel && channel.type === ChannelType.GuildText) {
+				// Send a final message before cleanup
+				await channel.send(`🏁 Session ${sessionId} ended. This channel will be archived.`);
+
+				// Archive the channel by renaming it and removing permissions for normal users
+				const archivedName = `archived-${channel.name}`;
+				await channel.setName(archivedName);
+
+				// Remove send permissions for authorized users, but keep view permissions for history
+				const permissionUpdates = this.authorizedUsers.map(userId => ({
+					id: userId,
+					allow: ['ViewChannel', 'ReadMessageHistory'] as const,
+					deny: ['SendMessages'] as const,
+				}));
+
+				await channel.permissionOverwrites.set([
+					{
+						id: channel.guild.roles.everyone.id,
+						deny: ['ViewChannel'],
+					},
+					...permissionUpdates,
+				]);
+			}
+		}
+		catch (error) {
+			console.error(`Error cleaning up channel for session ${sessionId}:`, error);
+		}
+		finally {
+			// Always clean up the mappings
+			this.sessionChannelMap.delete(sessionId);
+			this.channelSessionMap.delete(channelId);
+		}
 	}
 
 	private async handleOptionSelection(sessionId: string, optionNumber: number): Promise<void> {
@@ -203,7 +322,7 @@ export class DiscordBot {
 		maxRetries = 5,
 		baseDelay = 1000,
 	): Promise<T> {
-		let lastError: Error;
+		let lastError: Error | undefined;
 
 		for (let attempt = 0; attempt < maxRetries; attempt++) {
 			try {
@@ -231,7 +350,7 @@ export class DiscordBot {
 			}
 		}
 
-		throw new Error(lastError || 'Maximum retry attempts exceeded');
+		throw new Error(lastError?.message || 'Maximum retry attempts exceeded');
 	}
 
 	async stop(): Promise<void> {
