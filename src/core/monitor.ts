@@ -33,7 +33,7 @@ export class Monitor extends EventEmitter {
 	}>();
 
 	// Pattern matching for Claude Code messages
-	private readonly patterns = {
+	public readonly patterns = {
 		// Usage limit patterns - enhanced from proof-of-concept
 		usageLimit: /(?:5-hour limit reached.*resets|usage limit.*resets|rate limit.*exceeded|quota.*reached|limit.*exceeded)/i,
 		// Continuation ready patterns
@@ -158,7 +158,7 @@ export class Monitor extends EventEmitter {
 		await this.detectPatterns(sessionId, newOutput);
 	}
 
-	private getNewOutput(lastOutput: string, currentOutput: string): string {
+	public getNewOutput(lastOutput: string, currentOutput: string): string {
 		if (!lastOutput) {
 			return currentOutput;
 		}
@@ -311,7 +311,7 @@ export class Monitor extends EventEmitter {
 	 * Detect Claude Code approval dialogs using proven patterns from proof-of-concept
 	 * Requires all three components: question, numbered options, and current selection
 	 */
-	private detectApprovalDialog(output: string): boolean {
+	public detectApprovalDialog(output: string): boolean {
 		const lines = output.split('\n');
 		let hasApprovalQuestion = false;
 		let hasNumberedOptions = false;
@@ -347,7 +347,7 @@ export class Monitor extends EventEmitter {
 	/**
 	 * Extract approval information from the detected dialog including all available options
 	 */
-	private extractApprovalInfo(output: string): { tool: string; action: string; question: string; options: Array<{ number: number; text: string; shortcut?: string }> } {
+	public extractApprovalInfo(output: string): { tool: string; action: string; question: string; options: Array<{ number: number; text: string; shortcut?: string }> } {
 		const lines = output.split('\n');
 		let question = '';
 		let tool = 'Unknown';
@@ -387,9 +387,10 @@ export class Monitor extends EventEmitter {
 				question = cleanLine;
 
 				// Determine tool and action based on question content
-				if (cleanLine.includes('make this edit to') && cleanLine.includes('.ts')) {
+				if (cleanLine.includes('make this edit to')) {
 					tool = 'Edit';
-					const filename = cleanLine.match(/([^/\\\s]+\.tsx?)\?/)?.[1] || 'file';
+					// Support various file extensions including TypeScript and Python files
+					const filename = cleanLine.match(/([^/\\\s]+\.[a-z0-9]+)\?/i)?.[1] || 'file';
 					action = `Edit ${filename}`;
 				}
 				else if (cleanLine.includes('create') && cleanLine.includes('.')) {
@@ -468,7 +469,6 @@ export class Monitor extends EventEmitter {
 				toolName: approvalInfo.tool,
 				action: approvalInfo.action,
 				question: approvalInfo.question,
-				options: approvalInfo.options,
 				approvalRequested: true,
 				timestamp: new Date().toISOString(),
 			},
@@ -779,6 +779,29 @@ if (import.meta.vitest) {
 │                                                                                                                                               │
 ╰───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯`;
 
+			const pythonFileEditFixture = `╭─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Edit file                                                                                                                                                                                       │
+│ ╭─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮ │
+│ │ src/utils/config_helper.py                                                                                                                                                                     │ │
+│ │                                                                                                                                                                                             │ │
+│ │   42                         config_data = self.load_config(),                                                                                                                              │ │
+│ │   43                         default_timeout = 30,                                                                                                                                          │ │
+│ │   44                         # Set up connection parameters                                                                                                                                 │ │
+│ │   45 -                       connection_params = ConnectionConfig(                                                                                                                          │ │
+│ │   46 -                           timeout = default_timeout                                                                                                                                  │ │
+│ │   47 -                       ),                                                                                                                                                             │ │
+│ │   45 +                       connection_params = {"timeout": default_timeout},                                                                                                              │ │
+│ │   46                         # Additional configuration options                                                                                                                             │ │
+│ │   47                         extra_options = [                                                                                                                                              │ │
+│ │   48                             ConfigOption(                                                                                                                                              │ │
+│ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯ │
+│ Do you want to make this edit to config_helper.py?                                                                                                                                             │
+│ ❯ 1. Yes                                                                                                                                                                                        │
+│   2. Yes, allow all edits during this session (shift+tab)                                                                                                                                       │
+│   3. No, and tell Claude what to do differently (esc)                                                                                                                                           │
+│                                                                                                                                                                                                 │
+╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯`;
+
 			const noApprovalFixture = `Regular tmux output without approval dialog
 Some command output
 More text here`;
@@ -800,6 +823,11 @@ More text here`;
 
 			it('should detect file creation approval dialog', () => {
 				const result = (monitor as Monitor & { [key: string]: any }).detectApprovalDialog(tmuxCreateFileFixture);
+				expect(result).toBe(true);
+			});
+
+			it('should detect python file edit approval dialog', () => {
+				const result = (monitor as Monitor & { [key: string]: any }).detectApprovalDialog(pythonFileEditFixture);
 				expect(result).toBe(true);
 			});
 
@@ -845,6 +873,17 @@ More text here`;
 				expect(result.tool).toBe('Write');
 				expect(result.action).toBe('Create debug-stop.js');
 				expect(result.question).toBe('Do you want to create debug-stop.js?');
+				expect(result.options).toHaveLength(3);
+				expect(result.options[0]).toEqual({ number: 1, text: 'Yes' });
+				expect(result.options[1]).toEqual({ number: 2, text: 'Yes, allow all edits during this session', shortcut: 'shift+tab' });
+				expect(result.options[2]).toEqual({ number: 3, text: 'No, and tell Claude what to do differently', shortcut: 'esc' });
+			});
+
+			it('should extract approval info from python file edit dialog', () => {
+				const result = (monitor as Monitor & { [key: string]: any }).extractApprovalInfo(pythonFileEditFixture);
+				expect(result.tool).toBe('Edit');
+				expect(result.action).toBe('Edit config_helper.py');
+				expect(result.question).toBe('Do you want to make this edit to config_helper.py?');
 				expect(result.options).toHaveLength(3);
 				expect(result.options[0]).toEqual({ number: 1, text: 'Yes' });
 				expect(result.options[1]).toEqual({ number: 2, text: 'Yes, allow all edits during this session', shortcut: 'shift+tab' });
