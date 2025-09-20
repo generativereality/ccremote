@@ -150,9 +150,19 @@ CCREMOTE_AUTO_RESTART=true           # Auto-restart monitoring on failure
 ## Discord Setup
 
 1. **Create Bot**: Go to Discord Developer Portal → New Application → Bot
-2. **Get Token**: Copy the bot token from the Bot section  
-3. **Get User ID**: Enable Developer Mode in Discord → Right-click your profile → Copy User ID
-4. **Invite Bot**: Use OAuth2 URL Generator to create invite link with bot permissions
+2. **Enable Intent**: In Bot section, enable "Message Content Intent" (required for approval commands)
+3. **Get Token**: Copy the bot token from the Bot section
+4. **Get User ID**: Enable Developer Mode in Discord → Right-click your profile → Copy User ID
+5. **Invite Bot**: Use OAuth2 → URL Generator to create invite link with these permissions:
+   - **Administrator** (recommended - for full channel management)
+
+   OR for minimal permissions:
+   - **Manage Channels** (to create private session channels)
+   - **Manage Roles** (to set channel permissions)
+   - **Send Messages** (to send notifications)
+   - **Read Message History** (to see approval responses)
+
+   💡 **Note**: If your bot lacks Manage Channels permission, ccremote will gracefully fall back to DMs
 
 ## Requirements
 

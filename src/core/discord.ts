@@ -1,6 +1,6 @@
 import type { Message, TextChannel } from 'discord.js';
 import type { NotificationMessage } from '../types/index.ts';
-import { ChannelType, Client, GatewayIntentBits } from 'discord.js';
+import { ChannelType, Client, Events, GatewayIntentBits, PermissionFlagsBits } from 'discord.js';
 
 export class DiscordBot {
 	private client: Client;
@@ -25,38 +25,68 @@ export class DiscordBot {
 	}
 
 	async start(token: string, ownerId: string, authorizedUsers: string[] = []): Promise<void> {
+		console.info('[DISCORD] start() method called');
+		console.info(`[DISCORD] Starting Discord bot with owner: ${ownerId}, authorized users: ${authorizedUsers.join(', ')}`);
 		this.ownerId = ownerId;
 		this.authorizedUsers = [ownerId, ...authorizedUsers];
 
-		await this.client.login(token);
+		// Set up the ready event listener BEFORE logging in
+		return new Promise((resolve, reject) => {
+			// Add timeout to prevent hanging forever
+			const timeout = setTimeout(() => {
+				console.error('[DISCORD] Discord bot login timed out after 30 seconds');
+				reject(new Error('Discord bot login timeout'));
+			}, 30000);
 
-		// Wait for clientReady event (v14+ replacement for ready)
-		return new Promise((resolve) => {
-			this.client.once('clientReady', () => {
+			this.client.once(Events.ClientReady, () => {
+				console.info('[DISCORD] ClientReady event fired!');
+				clearTimeout(timeout);
 				this.isReady = true;
+
 				// Find the first guild the bot is in to create channels
 				const guild = this.client.guilds.cache.first();
 				if (guild) {
 					this.guildId = guild.id;
-					console.info(`Discord bot logged in as ${this.client.user?.tag} in guild: ${guild.name}`);
+					console.info(`[DISCORD] Discord bot logged in as ${this.client.user?.tag} in guild: ${guild.name}`);
 				}
 				else {
-					console.warn('Discord bot not in any guilds - cannot create channels');
+					console.warn('[DISCORD] Discord bot not in any guilds - cannot create channels');
 				}
+
+				console.info('[DISCORD] Bot startup complete, resolving promise');
 				resolve();
 			});
+
+			// Add error handler
+			this.client.once(Events.Error, (error) => {
+				console.error('[DISCORD] Discord client error during startup:', error);
+				clearTimeout(timeout);
+				reject(error);
+			});
+
+			// Now login - the event will fire after this
+			console.info('[DISCORD] Calling client.login()...');
+			this.client.login(token)
+				.then(() => {
+					console.info('[DISCORD] client.login() resolved successfully');
+				})
+				.catch((error) => {
+					console.error('[DISCORD] Login failed:', error);
+					clearTimeout(timeout);
+					reject(error);
+				});
 		});
 	}
 
 	private setupEventHandlers(): void {
-		this.client.on('messageCreate', (message) => {
+		this.client.on(Events.MessageCreate, (message) => {
 			if (message.author.bot) {
 				return;
 			}
 			void this.handleMessage(message);
 		});
 
-		this.client.on('error', (error) => {
+		this.client.on(Events.Error, (error) => {
 			console.error('Discord client error:', error);
 		});
 	}
@@ -171,101 +201,115 @@ export class DiscordBot {
 	}
 
 	async createOrGetChannel(sessionId: string, sessionName: string): Promise<string> {
+		console.info(`[DISCORD] createOrGetChannel called for session: ${sessionId}, name: ${sessionName}`);
+
 		// Check if we already have a channel for this session
 		const existingChannelId = this.sessionChannelMap.get(sessionId);
 		if (existingChannelId) {
+			console.info(`[DISCORD] Found existing channel mapping: ${existingChannelId}`);
 			try {
 				const channel = await this.client.channels.fetch(existingChannelId);
 				if (channel) {
+					console.info(`[DISCORD] Existing channel confirmed, returning: ${existingChannelId}`);
 					return existingChannelId;
 				}
 			}
 			catch {
-				// Channel doesn't exist anymore, continue to create new one
+				console.warn(`[DISCORD] Existing channel ${existingChannelId} no longer exists, will create new one`);
 			}
 		}
 
 		if (!this.guildId) {
-			console.warn('No guild available, falling back to DM');
+			console.warn('[DISCORD] No guild available, falling back to DM');
 			return this.createDMChannel(sessionId, sessionName);
 		}
 
-		return this.withExponentialBackoff(async () => {
-			const guild = await this.client.guilds.fetch(this.guildId!);
-			if (!guild) {
-				throw new Error(`Guild ${this.guildId} not found`);
-			}
-
-			// Create a private text channel named after the session
-			const channelName = `ccremote-${sessionName.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`;
-
-			// First, fetch all authorized users to ensure they're in cache
-			const validUserOverwrites: Array<{
-				id: string;
-				allow: ('ViewChannel' | 'SendMessages' | 'ReadMessageHistory')[];
-			}> = [];
-
-			// Always include owner
-			try {
-				await this.client.users.fetch(this.ownerId);
-				// Also check if user is in the guild (for better error handling)
-				try {
-					await guild.members.fetch(this.ownerId);
-				} catch {
-					console.warn(`Owner ${this.ownerId} is not a member of guild ${guild.name}, but proceeding anyway`);
+		console.info(`[DISCORD] Creating new channel in guild: ${this.guildId}`);
+		try {
+			return await this.withExponentialBackoff(async () => {
+				console.info(`[DISCORD] Fetching guild: ${this.guildId}`);
+				const guild = await this.client.guilds.fetch(this.guildId!);
+				if (!guild) {
+					throw new Error(`Guild ${this.guildId} not found`);
 				}
-				validUserOverwrites.push({
-					id: this.ownerId,
-					allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'],
-				});
-			} catch (error) {
-				console.warn(`Could not fetch owner user ${this.ownerId}:`, error);
-			}
+				console.info(`[DISCORD] Guild fetched successfully: ${guild.name}`);
 
-			// Try to fetch and add other authorized users
-			for (const userId of this.authorizedUsers) {
-				if (userId !== this.ownerId) {
+				// Create a private text channel named after the session
+				const channelName = `ccremote-${sessionName.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`;
+				console.info(`[DISCORD] Will create channel with name: ${channelName}`);
+
+				// Create channel first, then add permissions later to avoid caching issues
+				console.info(`[DISCORD] Creating basic channel first, then adding permissions...`);
+
+				// Create channel with bot permissions from the start
+				console.info(`[DISCORD] Creating channel with bot access ensured...`);
+				const botMember = guild.members.me;
+				const initialPermissions = [];
+
+				// Hide from @everyone but ensure bot has access
+				initialPermissions.push({
+					id: guild.roles.everyone.id,
+					deny: [PermissionFlagsBits.ViewChannel],
+				});
+
+				// Ensure bot always has access
+				if (botMember) {
+					initialPermissions.push({
+						id: botMember.id,
+						allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory],
+					});
+				}
+
+				const channel = await guild.channels.create({
+					name: channelName,
+					type: ChannelType.GuildText,
+					permissionOverwrites: initialPermissions,
+				});
+
+				// Try to add user permissions, but continue even if it fails
+				console.info(`[DISCORD] Channel created, attempting to add user permissions...`);
+				let permissionsSet = false;
+
+				for (const userId of this.authorizedUsers) {
 					try {
-						await this.client.users.fetch(userId);
-						// Also check if user is in the guild
-						try {
-							await guild.members.fetch(userId);
-						} catch {
-							console.warn(`User ${userId} is not a member of guild ${guild.name}, skipping`);
-							continue; // Skip this user if they're not in the guild
-						}
-						validUserOverwrites.push({
-							id: userId,
-							allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory'],
+						console.info(`[DISCORD] Fetching and adding permissions for user: ${userId}`);
+						// Fetch the user first to ensure it's in Discord.js cache
+						const user = await this.client.users.fetch(userId);
+						await channel.permissionOverwrites.create(user, {
+							ViewChannel: true,
+							SendMessages: true,
+							ReadMessageHistory: true,
 						});
-					} catch (error) {
-						console.warn(`Could not fetch authorized user ${userId}:`, error);
+						console.info(`[DISCORD] Successfully added permissions for user: ${userId}`);
+						permissionsSet = true;
+					}
+					catch (permError) {
+						console.warn(`Failed to add permissions for user ${userId}:`, permError);
+						console.warn('This is usually due to Discord permission hierarchy - continuing without user-specific permissions');
 					}
 				}
-			}
 
-			const channel = await guild.channels.create({
-				name: channelName,
-				type: ChannelType.GuildText,
-				permissionOverwrites: [
-					{
-						id: guild.roles.everyone.id,
-						deny: ['ViewChannel'], // Hide from everyone
-					},
-					...validUserOverwrites,
-				],
-			});
+				if (!permissionsSet) {
+					console.warn(`[DISCORD] Could not set user-specific permissions - channel will rely on server permissions`);
+				}
 
-			this.sessionChannelMap.set(sessionId, channel.id);
-			this.channelSessionMap.set(channel.id, sessionId);
+				console.info(`[DISCORD] Channel created with initial permissions (hidden from @everyone, bot has access)`);
 
-			// Send initial message with retry
-			await this.withExponentialBackoff(async () => {
-				await channel.send(`🚀 **ccremote Session Started**\nSession: ${sessionName} (${sessionId})\n\nI'll send notifications for this session here. This channel is private and only visible to authorized users.`);
-			});
+				this.sessionChannelMap.set(sessionId, channel.id);
+				this.channelSessionMap.set(channel.id, sessionId);
 
-			return channel.id;
-		}, 'create Discord channel');
+				// Send initial message with retry
+				await this.withExponentialBackoff(async () => {
+					await channel.send(`🚀 **ccremote Session Started**\nSession: ${sessionName} (${sessionId})\n\nI'll send notifications for this session here. This channel is private and only visible to authorized users.`);
+				});
+
+				return channel.id;
+			}, 'create Discord channel');
+		}
+		catch (error) {
+			console.warn(`[DISCORD] Failed to create channel in guild, falling back to DM:`, error);
+			return this.createDMChannel(sessionId, sessionName);
+		}
 	}
 
 	private async createDMChannel(sessionId: string, sessionName: string): Promise<string> {
@@ -307,33 +351,20 @@ export class DiscordBot {
 				await channel.setName(archivedName);
 
 				// Remove send permissions for authorized users, but keep view permissions for history
-				const validPermissionUpdates: Array<{
-					id: string;
-					allow: ('ViewChannel' | 'ReadMessageHistory')[];
-					deny: ('SendMessages')[];
-				}> = [];
-
-				// Fetch authorized users and build permission updates
 				for (const userId of this.authorizedUsers) {
 					try {
-						await this.client.users.fetch(userId);
-						validPermissionUpdates.push({
-							id: userId,
-							allow: ['ViewChannel', 'ReadMessageHistory'],
-							deny: ['SendMessages'],
+						// Fetch user first to ensure proper permission management
+						const user = await this.client.users.fetch(userId);
+						await channel.permissionOverwrites.edit(user, {
+							ViewChannel: true,
+							ReadMessageHistory: true,
+							SendMessages: false,
 						});
-					} catch (error) {
-						console.warn(`Could not fetch user ${userId} during cleanup:`, error);
+					}
+					catch (error) {
+						console.warn(`Failed to update permissions for user ${userId} during cleanup:`, error);
 					}
 				}
-
-				await channel.permissionOverwrites.set([
-					{
-						id: channel.guild.roles.everyone.id,
-						deny: ['ViewChannel'],
-					},
-					...validPermissionUpdates,
-				]);
 			}
 		}
 		catch (error) {
@@ -381,19 +412,24 @@ export class DiscordBot {
 				lastError = error as Error;
 				const errorMessage = error instanceof Error ? error.message : String(error);
 
-				// Check if this is a rate limit error
+				// Check if this is a rate limit error or user caching error
 				const isRateLimit = errorMessage.includes('too fast')
 					|| errorMessage.includes('rate limit')
 					|| errorMessage.includes('429');
 
-				if (!isRateLimit || attempt === maxRetries - 1) {
+				const isUserCacheError = errorMessage.includes('not a cached User or Role')
+					|| errorMessage.includes('cached User')
+					|| errorMessage.includes('cached Role');
+
+				if ((!isRateLimit && !isUserCacheError) || attempt === maxRetries - 1) {
 					throw error;
 				}
 
 				// Calculate delay with exponential backoff + jitter
 				const delay = baseDelay * 2 ** attempt + Math.random() * 1000;
 
-				console.warn(`${operationName || 'Discord operation'} rate limited (attempt ${attempt + 1}/${maxRetries}), retrying in ${Math.round(delay)}ms: ${errorMessage}`);
+				const errorType = isRateLimit ? 'rate limited' : (isUserCacheError ? 'user cache error' : 'unknown error');
+				console.warn(`${operationName || 'Discord operation'} ${errorType} (attempt ${attempt + 1}/${maxRetries}), retrying in ${Math.round(delay)}ms: ${errorMessage}`);
 
 				await new Promise(resolve => setTimeout(resolve, delay));
 			}

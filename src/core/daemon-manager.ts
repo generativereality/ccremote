@@ -8,8 +8,8 @@
 import type { DaemonConfig } from './daemon.ts';
 import { spawn } from 'node:child_process';
 import { accessSync, constants, promises as fs } from 'node:fs';
-import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export type DaemonProcess = {
@@ -377,7 +377,8 @@ export class DaemonManager {
 					if (deleteCode === 0) {
 						// Successfully deleted
 						resolve();
-					} else {
+					}
+					else {
 						// Failed to delete, but don't fail the operation - the process might not exist
 						console.warn(`Failed to force-delete PM2 process ${pm2Name}: ${deleteError}`);
 						resolve();

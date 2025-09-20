@@ -1,16 +1,16 @@
 import type { DaemonConfig } from '../core/daemon.ts';
 import { consola } from 'consola';
 import { define } from 'gunshi';
+import { loadConfig, validateConfig } from '../core/config.ts';
 import { daemonManager } from '../core/daemon-manager.ts';
 import { SessionManager } from '../core/session.ts';
 import { TmuxManager } from '../core/tmux.ts';
-import { loadConfig, validateConfig } from '../core/config.ts';
 
 export const resumeCommand = define({
 	name: 'resume',
 	description: 'Reattach to existing tmux session and restart monitoring',
 	args: {
-		session: {
+		'session': {
 			type: 'string',
 			description: 'Resume specific session by ID (required when multiple sessions available)',
 		},
@@ -28,7 +28,8 @@ export const resumeCommand = define({
 		try {
 			config = loadConfig();
 			validateConfig(config);
-		} catch (error) {
+		}
+		catch (error) {
 			consola.error('Configuration error:', error instanceof Error ? error.message : error);
 			consola.error('Run "ccremote init" to configure ccremote first.');
 			process.exit(1);
@@ -47,10 +48,10 @@ export const resumeCommand = define({
 		const activeTmuxIds = new Set(activeTmuxSessions.map(s => s.name));
 
 		// Find sessions that can be resumed
-		let resumableSessions = allSessions.filter(session => {
+		let resumableSessions = allSessions.filter((session) => {
 			// Session must exist in tmux and be in a resumable state
-			return activeTmuxIds.has(session.tmuxSession) &&
-				   (session.status === 'active' || session.status === 'waiting' || session.status === 'waiting_approval');
+			return activeTmuxIds.has(session.tmuxSession)
+				&& (session.status === 'active' || session.status === 'waiting' || session.status === 'waiting_approval');
 		});
 
 		// Filter by specific session if requested
@@ -59,16 +60,18 @@ export const resumeCommand = define({
 			if (!specificSession) {
 				if (allSessions.find(s => s.id === session)) {
 					consola.error(`Session ${session} exists but cannot be resumed (tmux session not found or ended)`);
-				} else {
+				}
+				else {
 					consola.error(`Session not found: ${session}`);
 				}
 				process.exit(1);
 			}
 			resumableSessions = [specificSession];
-		} else if (resumableSessions.length > 1) {
+		}
+		else if (resumableSessions.length > 1) {
 			// If multiple sessions, show them and ask user to specify
 			consola.info('Multiple sessions can be resumed:');
-			resumableSessions.forEach(session => {
+			resumableSessions.forEach((session) => {
 				consola.info(`  ${session.id}: ${session.name} (${session.status})`);
 			});
 			consola.info('\nUse --session <id> to resume a specific session.');
@@ -78,14 +81,14 @@ export const resumeCommand = define({
 		if (resumableSessions.length === 0) {
 			consola.info('No sessions to resume.');
 			consola.info('\nActive tmux sessions:');
-			activeTmuxSessions.forEach(session => {
+			activeTmuxSessions.forEach((session) => {
 				consola.info(`  ${session.name}`);
 			});
 
 			const endedSessions = allSessions.filter(s => !activeTmuxIds.has(s.tmuxSession));
 			if (endedSessions.length > 0) {
 				consola.info('\nSessions with ended tmux sessions (use "ccremote clean" to remove):');
-				endedSessions.forEach(session => {
+				endedSessions.forEach((session) => {
 					consola.info(`  ${session.id}: ${session.name} (tmux session ${session.tmuxSession} not found)`);
 				});
 			}
@@ -94,7 +97,7 @@ export const resumeCommand = define({
 
 		if (dryRun) {
 			consola.info('Would resume the following sessions:');
-			resumableSessions.forEach(session => {
+			resumableSessions.forEach((session) => {
 				consola.info(`  ${session.id}: ${session.name} (${session.status}) -> reattach to ${session.tmuxSession}`);
 			});
 			process.exit(0);
@@ -104,7 +107,7 @@ export const resumeCommand = define({
 		if (resumableSessions.length > 1) {
 			consola.error('Cannot resume multiple sessions at once for reattachment.');
 			consola.info('\nAvailable sessions to resume:');
-			resumableSessions.forEach(session => {
+			resumableSessions.forEach((session) => {
 				consola.info(`  ccremote resume --session ${session.id}  # ${session.name}`);
 			});
 			process.exit(1);
@@ -127,7 +130,7 @@ export const resumeCommand = define({
 			// Update session status to reflect it's being monitored again
 			await sessionManager.updateSession(sessionToResume.id, {
 				status: 'active',
-				lastActivity: new Date().toISOString()
+				lastActivity: new Date().toISOString(),
 			});
 
 			// Ensure logs directory exists - use global but project-specific subdirectory
@@ -212,8 +215,8 @@ export const resumeCommand = define({
 					process.exit(1);
 				}
 			});
-
-		} catch (error) {
+		}
+		catch (error) {
 			consola.error('Failed to resume session:', error instanceof Error ? error.message : error);
 			process.exit(1);
 		}

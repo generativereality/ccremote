@@ -115,16 +115,14 @@ export class TmuxManager {
 		try {
 			const command = 'tmux list-sessions -F "#{session_name},#{session_created},#{session_windows}"';
 			const { stdout } = await execAsync(command);
-			return stdout.trim().split('\n')
-				.filter(line => line.length > 0)
-				.map(line => {
-					const [name, created, windows] = line.split(',');
-					return {
-						name,
-						created: new Date(Number(created) * 1000).toISOString(),
-						windows: Number.parseInt(windows, 10),
-					};
-				});
+			return stdout.trim().split('\n').filter(line => line.length > 0).map((line) => {
+				const [name, created, windows] = line.split(',');
+				return {
+					name,
+					created: new Date(Number(created) * 1000).toISOString(),
+					windows: Number.parseInt(windows, 10),
+				};
+			});
 		}
 		catch {
 			return [];

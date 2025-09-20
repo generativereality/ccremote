@@ -1,8 +1,8 @@
 import type { SessionState } from '../types/index.ts';
 import { randomBytes } from 'node:crypto';
 import { promises as fs } from 'node:fs';
-import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
+import { join } from 'node:path';
 
 export class SessionManager {
 	private globalConfigDir: string;
@@ -182,7 +182,7 @@ export class SessionManager {
 	async listSessionsForProject(projectPath?: string): Promise<SessionState[]> {
 		const targetPath = projectPath || process.cwd();
 		return Array.from(this.sessions.values()).filter(session =>
-			session.projectPath === targetPath
+			session.projectPath === targetPath,
 		);
 	}
 

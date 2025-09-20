@@ -70,7 +70,14 @@ ccremote is a CLI tool that provides remote control for Claude Code sessions wit
 - Notification types: `limit`, `continued`, `approval`, `error`
 - Per-user bots recommended for privacy
 - Approval workflow: detect → notify → wait for user response
-- **Permissions Policy**: Only request Discord permissions that are actually used in code (src/core/discord.ts). When adding new features requiring additional permissions, update both the code AND the documentation/init instructions to match.
+- **Permissions Policy**: Bot requires these Discord permissions (as implemented in src/core/discord.ts):
+  - **Administrator** (recommended): Full channel management without hierarchy issues
+  - OR minimal permissions:
+    - **Manage Channels**: Create private session channels (falls back to DMs if missing)
+    - **Manage Roles**: Set channel permission overwrites for privacy
+    - **Send Messages**: Send notifications to channels/DMs
+    - **Read Message History**: Read user approval responses
+  - **Message Content Intent**: Required gateway intent for approval commands
 
 ## Configuration
 

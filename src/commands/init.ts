@@ -37,36 +37,67 @@ export const initCommand = define({
 			? `${process.env.HOME}/.ccremote.env`
 			: 'ccremote.env';
 
+		// Show Discord setup instructions first
+		const showInstructions = () => {
+			consola.info('');
+			consola.info('📱 Discord Bot Setup Instructions:');
+			consola.info('ℹ️  Note: Create a Discord app and bot only for you to ensure privacy');
+			consola.info('');
+			consola.info('1. Go to https://discord.com/developers/applications');
+			consola.info('2. Click "New Application" and give it a name');
+			consola.info('3. Go to the "Bot" section in the sidebar');
+			consola.info('4. Click "Add Bot" if not already created');
+			consola.info('5. Enable this Privileged Gateway Intent:');
+			consola.info('   - ✅ MESSAGE CONTENT INTENT (for approval commands)');
+			consola.info('6. Copy the "Token" - this is your CCREMOTE_DISCORD_BOT_TOKEN');
+			consola.info('7. For your Discord User ID:');
+			consola.info('   - Open the Discord app (not the developer portal)');
+			consola.info('   - Enable Developer Mode in Discord Settings > Advanced');
+			consola.info('   - Right-click your username and select "Copy User ID"');
+			consola.info('');
+			consola.info('🚀 Next steps:');
+			consola.info('1. Create a Discord server (optional) and invite your bot:');
+			consola.info('   - You can create a new server just for ccremote (+ button in Discord > Create My Own)');
+			consola.info('   - Or use an existing server where you have admin permissions');
+			consola.info('   - To invite your bot: go back to Developer Portal > OAuth2 > URL Generator');
+			consola.info('   - Select "bot" scope and these permissions:');
+			consola.info('     • Administrator (recommended - for full channel management)');
+			consola.info('     OR for minimal permissions:');
+			consola.info('       • Manage Channels (to create private session channels)');
+			consola.info('       • Manage Roles (to set channel permissions)');
+			consola.info('       • Send Messages (to send notifications)');
+			consola.info('       • Read Message History (to see approval responses)');
+			consola.info('   - Visit the generated URL to invite your bot');
+			consola.info('   - 💡 Note: If bot lacks Manage Channels permission, it will fall back to DMs');
+			consola.info('2. (Optional) Run: ccremote setup-tmux for optimized tmux configuration');
+			consola.info('3. Run: ccremote start');
+			consola.info('');
+		};
+
 		// Check if file already exists
 		if (existsSync(configPath) && !force) {
-			const overwrite = await confirm({
-				message: `Configuration file already exists at ${configPath}. Overwrite?`,
-				initialValue: false,
+			showInstructions();
+
+			const action = await select({
+				message: `Configuration file already exists at ${configPath}. What would you like to do?`,
+				options: [
+					{ value: 'view', label: 'Just view instructions (done)', hint: 'Exit after showing instructions' },
+					{ value: 'overwrite', label: 'Overwrite existing configuration', hint: 'Create new config file' },
+				],
 			});
 
-			if (isCancel(overwrite) || !overwrite) {
+			if (isCancel(action)) {
 				cancel('Configuration setup cancelled.');
 				process.exit(1);
 			}
-		}
 
-		// Show Discord setup instructions
-		consola.info('');
-		consola.info('📱 Discord Bot Setup Instructions:');
-		consola.info('ℹ️  Note: Create a Discord app and bot only for you to ensure privacy');
-		consola.info('');
-		consola.info('1. Go to https://discord.com/developers/applications');
-		consola.info('2. Click "New Application" and give it a name');
-		consola.info('3. Go to the "Bot" section in the sidebar');
-		consola.info('4. Click "Add Bot" if not already created');
-		consola.info('5. Enable this Privileged Gateway Intent:');
-		consola.info('   - ✅ MESSAGE CONTENT INTENT (for approval commands)');
-		consola.info('6. Copy the "Token" - this is your CCREMOTE_DISCORD_BOT_TOKEN');
-		consola.info('7. For your Discord User ID:');
-		consola.info('   - Open the Discord app (not the developer portal)');
-		consola.info('   - Enable Developer Mode in Discord Settings > Advanced');
-		consola.info('   - Right-click your username and select "Copy User ID"');
-		consola.info('');
+			if (action === 'view') {
+				outro('✨ Instructions displayed. Your existing configuration is unchanged.');
+				process.exit(0);
+			}
+		} else {
+			showInstructions();
+		}
 
 		// Ask for Discord bot token
 		const botToken = await text({
@@ -148,18 +179,6 @@ CCREMOTE_AUTO_RESTART=true           # Auto-restart monitoring on failure (defau
 			writeFileSync(configPath, configContent);
 
 			outro(`✅ Configuration file created: ${configPath}`);
-
-			consola.info('');
-			consola.info('🚀 Next steps:');
-			consola.info('1. Create a Discord server (optional) and invite your bot:');
-			consola.info('   - You can create a new server just for ccremote (+ button in Discord > Create My Own)');
-			consola.info('   - Or use an existing server where you have admin permissions');
-			consola.info('   - To invite your bot: go back to Developer Portal > OAuth2 > URL Generator');
-			consola.info('   - Select "bot" scope and this permission:');
-			consola.info('     • Send Messages');
-			consola.info('   - Visit the generated URL to invite your bot');
-			consola.info('2. (Optional) Run: ccremote setup-tmux for optimized tmux configuration');
-			consola.info('3. Run: ccremote start');
 		}
 		catch (error) {
 			consola.error('Failed to create configuration file:', error instanceof Error ? error.message : error);

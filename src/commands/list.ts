@@ -28,7 +28,8 @@ export const listCommand = define({
 			if (sessions.length === 0) {
 				if (all) {
 					consola.info('No sessions found globally.');
-				} else {
+				}
+				else {
 					consola.info('No sessions found for current project.');
 					consola.info('Use --all to see sessions from all projects.');
 				}
@@ -38,7 +39,8 @@ export const listCommand = define({
 
 			if (all) {
 				consola.info('All ccremote Sessions:');
-			} else {
+			}
+			else {
 				consola.info(`ccremote Sessions for ${process.cwd()}:`);
 			}
 			consola.info('');

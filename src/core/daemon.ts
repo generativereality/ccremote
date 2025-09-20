@@ -92,18 +92,35 @@ export class Daemon {
 
 			// Start Discord bot
 			this.log('INFO', 'Starting Discord bot...');
-			await this.discordBot.start(
-				this.config.discordBotToken,
-				this.config.discordOwnerId,
-				this.config.discordAuthorizedUsers || [],
-			);
+			this.log('INFO', `Discord config: token=${this.config.discordBotToken ? '***SET***' : 'MISSING'}, owner=${this.config.discordOwnerId}, users=${JSON.stringify(this.config.discordAuthorizedUsers || [])}`);
+			this.log('INFO', 'About to call discordBot.start()...');
+
+			try {
+				await this.discordBot.start(
+					this.config.discordBotToken,
+					this.config.discordOwnerId,
+					this.config.discordAuthorizedUsers || [],
+				);
+				this.log('INFO', 'Discord bot started successfully');
+			}
+			catch (error) {
+				this.log('ERROR', `Discord bot failed to start: ${error}`);
+				throw error;
+			}
+
+			// Give Discord bot a moment to fully initialize before creating channels
+			this.log('INFO', 'Waiting 1 second for Discord bot to fully initialize...');
+			await new Promise(resolve => setTimeout(resolve, 1000));
 
 			// Set up Discord channel if provided
 			if (this.config.discordChannelId) {
+				this.log('INFO', `Using existing Discord channel: ${this.config.discordChannelId}`);
 				await this.discordBot.assignChannelToSession(this.config.sessionId, this.config.discordChannelId);
 			}
 			else {
+				this.log('INFO', `Creating new Discord channel for session: ${session.name}`);
 				const channelId = await this.discordBot.createOrGetChannel(this.config.sessionId, session.name);
+				this.log('INFO', `Created Discord channel: ${channelId}`);
 				await this.sessionManager.updateSession(this.config.sessionId, { channelId });
 			}
 
