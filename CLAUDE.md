@@ -147,47 +147,32 @@ The symlink approach automatically uses the latest built version when you rebuil
 - PM2 binary is resolved at runtime from multiple possible locations
 - No external dependencies need to be installed when using ccremote in other projects
 
-## NPM Publishing Process
+## Release Process
 
-### Prerequisites
+### Key Principles
 
-1. **NPM Account**: Ensure you're logged in to npm (`npm whoami`)
-2. **Repository Access**: Push access to the GitHub repository
-3. **Clean Working Directory**: All changes committed and pushed
+- **Use GitHub PRs**: Never merge to `main` locally - always use GitHub pull requests
+- **Test before merging**: Bump version and test releases (`npm pack` + local install) on feature branches
+- **Publish from main**: Only publish to npm from `main` branch after PR merge
+- **Tag releases**: Create git tags for published versions
 
-### Release Workflow
+### Release Commands
 
 ```bash
-# 1. Run full release process (recommended)
+# Full release process (main branch only)
 bun run release
 
-# This automatically:
-# - Runs lint, typecheck, tests, and build
-# - Prompts for version bump (patch/minor/major)
-# - Creates git tag and commit
-# - Updates CHANGELOG.md (if bumpp is configured for it)
-
-# 2. Publish to npm
-npm publish
-
-# This automatically:
-# - Runs `prepack` (builds distribution)
-# - Runs `prepublishOnly` (publint validation)  
-# - Publishes to npm registry
-# - Dependencies (including PM2) installed automatically by npm
+# Test package without releasing
+bun run release:test
 ```
 
-### Manual Steps (if needed)
+### Workflow
 
-```bash
-# Alternative: Step-by-step approach
-bun run check        # Validate everything
-bumpp                # Version bump with prompts
-npm publish          # Publish to registry
-```
-
-### Post-Release
-
-1. **Verify Publication**: Check package at `https://npmjs.com/package/ccremote`
-2. **Test Installation**: `npm install -g ccremote@latest` in clean environment
-3. **Update Documentation**: Ensure README reflects any new features
+1. **Merge features**: All features merged to main via GitHub PRs
+2. **Release**: On main branch, run `bun run release`
+   - Validates you're on main branch
+   - Runs all checks (lint, typecheck, tests, build)
+   - Creates and tests package locally
+   - Interactive version bump
+   - Publishes to npm and creates git tag
+3. **Bug fixes**: If issues found, fix on main and re-run `bun run release`
