@@ -136,11 +136,11 @@ export const resumeCommand = define({
 			// Ensure logs directory exists - use global but project-specific subdirectory
 			const { promises: fs } = await import('node:fs');
 			const { homedir } = await import('node:os');
-			const { join, basename } = await import('node:path');
+			const nodePath = await import('node:path');
 
-			const globalLogsDir = join(homedir(), '.ccremote', 'logs');
-			const projectName = basename(process.cwd());
-			const logFile = join(globalLogsDir, `${projectName}-${sessionToResume.id}.log`);
+			const globalLogsDir = nodePath.join(homedir(), '.ccremote', 'logs');
+			const projectName = nodePath.basename(process.cwd());
+			const logFile = nodePath.join(globalLogsDir, `${projectName}-${sessionToResume.id}.log`);
 			await fs.mkdir(globalLogsDir, { recursive: true });
 
 			// Prepare daemon configuration

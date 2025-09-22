@@ -46,7 +46,7 @@ export const listCommand = define({
 			consola.info('');
 
 			for (const session of sessions) {
-				const tmuxActive = activeTmuxSessions.includes(session.tmuxSession);
+				const tmuxActive = activeTmuxSessions.some(tmuxSession => tmuxSession.name === session.tmuxSession);
 				const daemon = daemonManager.getDaemon(session.id);
 				const daemonActive = daemon && daemonManager.isDaemonRunning(session.id);
 
@@ -69,7 +69,7 @@ export const listCommand = define({
 			const deadSessions = sessions.filter((s) => {
 				const daemon = daemonManager.getDaemon(s.id);
 				const daemonActive = daemon && daemonManager.isDaemonRunning(s.id);
-				const tmuxActive = activeTmuxSessions.includes(s.tmuxSession);
+				const tmuxActive = activeTmuxSessions.some(tmuxSession => tmuxSession.name === s.tmuxSession);
 				return (!tmuxActive && !daemonActive) && s.status === 'active';
 			});
 

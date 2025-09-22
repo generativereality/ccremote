@@ -2,7 +2,7 @@ import type { SessionState } from '../types/index.ts';
 import { randomBytes } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 export class SessionManager {
 	private globalConfigDir: string;
@@ -42,17 +42,17 @@ export class SessionManager {
 				let needsMigration = false;
 
 				for (const [id, sessionRaw] of Object.entries(sessionData)) {
-					const session = sessionRaw as any;
+					const session = sessionRaw as SessionState;
 
 					// Migrate old sessions that don't have the new fields
 					if (!session.projectPath || !session.workingDirectory) {
 						// Mark legacy sessions as belonging to ccremote project for backwards compatibility
-						session.projectPath = session.projectPath || '/Users/fredrik.wollsen/Dev/ccremote';
-						session.workingDirectory = session.workingDirectory || '/Users/fredrik.wollsen/Dev/ccremote';
+						(session as any).projectPath = session.projectPath || '/Users/fredrik.wollsen/Dev/ccremote';
+						(session as any).workingDirectory = session.workingDirectory || '/Users/fredrik.wollsen/Dev/ccremote';
 						needsMigration = true;
 					}
 
-					this.sessions.set(id, session as SessionState);
+					this.sessions.set(id, session);
 				}
 
 				// Save migrated data if needed
@@ -78,6 +78,10 @@ export class SessionManager {
 		for (const [id, session] of this.sessions) {
 			sessionData[id] = session;
 		}
+
+		// Ensure directory exists for the sessions file
+		const dir = dirname(this.sessionsFile);
+		await fs.mkdir(dir, { recursive: true });
 
 		// Write atomically using temp file
 		const tempFile = `${this.sessionsFile}.tmp.${randomBytes(4).toString('hex')}`;

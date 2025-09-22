@@ -1,5 +1,5 @@
 import { existsSync, writeFileSync } from 'node:fs';
-import { cancel, confirm, intro, isCancel, outro, select, text } from '@clack/prompts';
+import { cancel, intro, isCancel, outro, select, text } from '@clack/prompts';
 import { consola } from 'consola';
 import { define } from 'gunshi';
 
@@ -38,7 +38,7 @@ export const initCommand = define({
 			: 'ccremote.env';
 
 		// Show Discord setup instructions first
-		const showInstructions = () => {
+		const showInstructions = (): void => {
 			consola.info('');
 			consola.info('📱 Discord Bot Setup Instructions:');
 			consola.info('ℹ️  Note: Create a Discord app and bot only for you to ensure privacy');
@@ -95,7 +95,8 @@ export const initCommand = define({
 				outro('✨ Instructions displayed. Your existing configuration is unchanged.');
 				process.exit(0);
 			}
-		} else {
+		}
+		else {
 			showInstructions();
 		}
 

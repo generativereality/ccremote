@@ -233,7 +233,7 @@ export class DiscordBot {
 			if (guild) {
 				// Look for existing channel by name
 				const existingChannel = guild.channels.cache.find(
-					(channel) => channel.name === channelName && channel.isTextBased()
+					channel => channel.name === channelName && channel.isTextBased(),
 				);
 
 				if (existingChannel) {

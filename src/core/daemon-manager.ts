@@ -356,9 +356,8 @@ export class DaemonManager {
 				stdio: ['ignore', 'pipe', 'pipe'],
 			});
 
-			let stopError = '';
-			stopProcess.stderr?.on('data', (data) => {
-				stopError += data.toString();
+			stopProcess.stderr?.on('data', () => {
+				// Ignore stderr for now
 			});
 
 			stopProcess.on('close', (_stopCode) => {

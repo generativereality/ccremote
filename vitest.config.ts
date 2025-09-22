@@ -5,7 +5,7 @@ export default defineConfig({
 		globals: true,
 		environment: 'node',
 		includeSource: ['src/**/*.ts'],
-		exclude: ['node_modules', 'dist', 'related-repos'],
+		exclude: ['node_modules', 'dist', 'related-repos', 'docs'],
 	},
 	define: {
 		'import.meta.vitest': 'undefined',
