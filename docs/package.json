@@ -1,0 +1,22 @@
+{
+  "name": "@ccremote/docs",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Documentation for ccremote",
+  "type": "module",
+  "scripts": {
+    "build": "vitepress build",
+    "deploy": "wrangler deploy",
+    "deploy:prod": "wrangler deploy --env production",
+    "dev": "vitepress dev",
+    "preview": "vitepress preview"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.20",
+    "vitepress": "^1.6.4",
+    "vitepress-plugin-group-icons": "^1.6.3", 
+    "vitepress-plugin-llms": "^1.7.3",
+    "vitepress-plugin-mermaid": "^2.0.17",
+    "wrangler": "^4.32.0"
+  }
+}

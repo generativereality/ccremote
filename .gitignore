@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.env
+.env.local
+ccremote.env
+.ccremote/
+*.log
+.DS_Store
+*.tgz
+coverage/
+.nyc_output/
+.eslintcache
+.claude/settings.local.json
+bun.lockb

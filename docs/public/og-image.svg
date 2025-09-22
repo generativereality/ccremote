@@ -1,0 +1,72 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4c1d95;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#5865f2;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#7c3aed;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="logo-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#5865f2;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#7289da;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="remote-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:0.95" />
+      <stop offset="100%" style="stop-color:#f0f0f0;stop-opacity:0.95" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bg-gradient)"/>
+  
+  <!-- Subtle grid pattern -->
+  <pattern id="grid" width="60" height="60" patternUnits="userSpaceOnUse">
+    <path d="M 60 0 L 0 0 0 60" fill="none" stroke="white" stroke-opacity="0.03" stroke-width="1"/>
+  </pattern>
+  <rect width="1200" height="630" fill="url(#grid)"/>
+  
+  <!-- Main content centered -->
+  <g transform="translate(600, 315)">
+    
+    <!-- Logo (much larger - scaled to ~200px) -->
+    <g transform="translate(-100, -100) scale(3.125)">
+      <!-- Logo background circle -->
+      <circle cx="32" cy="32" r="30" fill="url(#logo-bg)" stroke="#4752c4" stroke-width="2"/>
+      
+      <!-- Remote control body -->
+      <rect x="20" y="16" width="24" height="32" rx="4" fill="url(#remote-gradient)" stroke="#d0d0d0" stroke-width="1"/>
+      
+      <!-- Screen area -->
+      <rect x="24" y="20" width="16" height="8" rx="1" fill="#2c2f33" opacity="0.8"/>
+      <rect x="25" y="21" width="14" height="6" rx="0.5" fill="#36393f"/>
+      
+      <!-- Control pad -->
+      <circle cx="32" cy="34" r="3" fill="#5865f2" opacity="0.8"/>
+      <circle cx="28" cy="38" r="2" fill="#5865f2" opacity="0.7"/>
+      <circle cx="36" cy="38" r="2" fill="#5865f2" opacity="0.7"/>
+      <circle cx="32" cy="42" r="2" fill="#5865f2" opacity="0.7"/>
+      
+      <!-- Side buttons -->
+      <rect x="18" y="24" width="2" height="4" rx="1" fill="#7289da"/>
+      <rect x="44" y="24" width="2" height="4" rx="1" fill="#7289da"/>
+      
+      <!-- Status indicators -->
+      <circle cx="48" cy="16" r="4" fill="#00d924" opacity="0.8"/>
+      <circle cx="48" cy="16" r="3" fill="#00ff2a"/>
+      <circle cx="48" cy="16" r="1.5" fill="white" opacity="0.6"/>
+      
+      <!-- Connection waves -->
+      <path d="M 50 12 Q 54 14 50 16 Q 54 18 50 20" stroke="#00ff2a" stroke-width="1.5" fill="none" opacity="0.6"/>
+      <path d="M 52 11 Q 58 14 52 17 Q 58 20 52 23" stroke="#00ff2a" stroke-width="1" fill="none" opacity="0.4"/>
+    </g>
+    
+    <!-- Large ccremote text -->
+    <text x="0" y="200" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="120" font-weight="800" fill="white" text-anchor="middle" letter-spacing="-0.02em">
+      ccremote
+    </text>
+    
+  </g>
+  
+  <!-- Subtle highlight at bottom -->
+  <rect x="0" y="580" width="1200" height="50" fill="white" fill-opacity="0.05"/>
+  
+</svg>
