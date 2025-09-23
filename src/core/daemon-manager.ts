@@ -41,7 +41,17 @@ export class DaemonManager {
 	 */
 	async ensureInitialized(): Promise<void> {
 		if (this.initPromise) {
-			await this.initPromise;
+			// Add timeout to prevent hanging during initialization
+			try {
+				await Promise.race([
+					this.initPromise,
+					new Promise((_, reject) =>
+						setTimeout(() => reject(new Error('Daemon initialization timeout')), 10000)
+					)
+				]);
+			} catch (error) {
+				console.warn('Daemon initialization failed or timed out:', error instanceof Error ? error.message : error);
+			}
 			this.initPromise = null;
 		}
 	}
@@ -332,11 +342,19 @@ export class DaemonManager {
 					stdio: ['ignore', 'pipe', 'pipe'],
 				});
 
+				// Add timeout to prevent hanging
+				const timeout = setTimeout(() => {
+					checkProcess.kill('SIGTERM');
+					resolve(false);
+				}, 5000); // 5 second timeout
+
 				checkProcess.on('close', (code) => {
+					clearTimeout(timeout);
 					resolve(code === 0);
 				});
 
 				checkProcess.on('error', () => {
+					clearTimeout(timeout);
 					resolve(false);
 				});
 			}
