@@ -1,5 +1,6 @@
 <div align="center">
     <h1>ccremote</h1>
+    <p><strong>Claude Code Remote: remote approvals, quota auto-continuation, and command scheduling</strong></p>
 </div>
 
 <p align="center">
@@ -7,9 +8,7 @@
     <a href="https://packagephobia.com/result?p=ccremote"><img src="https://packagephobia.com/badge?p=ccremote" alt="install size" /></a>
 </p>
 
-> Claude Code Remote Control
-
-Manage approvals via Discord and automatically continue when usage limits reset.
+> Approve prompts from Discord · Continue sessions after quota resets · Align quota windows with your workday
 
 ## Quick Start
 

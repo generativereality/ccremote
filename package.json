@@ -2,14 +2,14 @@
   "name": "ccremote",
   "type": "module",
   "version": "0.0.1",
-  "description": "Remote Claude Code control with auto-continuation and Discord approvals",
+  "description": "Claude Code Remote (ccremote): approve prompts from Discord, auto-continue sessions after quota resets, and schedule quota windows around your workday.",
   "author": "ccremote contributors",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/generativereality/ccremote.git"
   },
-  "homepage": "https://github.com/generativereality/ccremote#readme",
+  "homepage": "https://ccremote.dev",
   "bugs": {
     "url": "https://github.com/generativereality/ccremote/issues"
   },
