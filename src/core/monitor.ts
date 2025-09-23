@@ -30,6 +30,7 @@ export class Monitor extends EventEmitter {
 		retryCount: number;
 		lastContinuationTime?: Date;
 		scheduledResetTime?: Date;
+		immediateContinueAttempted?: boolean;
 	}>();
 
 	// Pattern matching for Claude Code messages
@@ -79,6 +80,7 @@ export class Monitor extends EventEmitter {
 			retryCount: 0,
 			lastContinuationTime: undefined,
 			scheduledResetTime: undefined,
+			immediateContinueAttempted: false,
 		});
 
 		// Start polling
@@ -233,51 +235,49 @@ export class Monitor extends EventEmitter {
 
 		this.emit('limit_detected', event);
 
-		// Try to continue immediately first (similar to POC logic)
-		const continueResult = await this.tryImmediateContinuation(sessionId, output);
+		// Only try immediate continuation once per limit detection
+		if (!sessionState.immediateContinueAttempted) {
+			sessionState.immediateContinueAttempted = true;
 
-		if (continueResult.success) {
-			// Continuation succeeded immediately - limit has already reset
-			logger.info(`Immediate continuation successful for session ${sessionId}`);
-			sessionState.lastContinuationTime = new Date();
-			sessionState.awaitingContinuation = false;
+			// Try to continue immediately first (similar to POC logic)
+			const continueResult = await this.tryImmediateContinuation(sessionId, output);
 
-			// Send success notification
-			await this.discordBot.sendNotification(sessionId, {
-				type: 'continued',
-				sessionId,
-				sessionName: (await this.sessionManager.getSession(sessionId))?.name || sessionId,
-				message: 'Session automatically continued after limit reset.',
-			});
+			if (continueResult.success) {
+				// Continuation succeeded immediately - limit has already reset
+				logger.info(`Immediate continuation successful for session ${sessionId} - no notification needed`);
+				sessionState.lastContinuationTime = new Date();
+				sessionState.awaitingContinuation = false;
+				sessionState.immediateContinueAttempted = false; // Reset for next limit detection
 
-			await this.sessionManager.updateSession(sessionId, { status: 'active' });
-		}
-		else {
-			// Continuation failed - schedule for later
-			const resetTime = this.extractResetTime(continueResult.response || output);
-			if (resetTime) {
-				const resetDateTime = await this.parseResetTime(resetTime);
-				if (resetDateTime) {
-					sessionState.scheduledResetTime = resetDateTime;
-					logger.info(`Scheduled continuation for ${resetDateTime.toLocaleString()}`);
-				}
+				await this.sessionManager.updateSession(sessionId, { status: 'active' });
+				return; // Exit early, no notification needed
 			}
-
-			// Send Discord notification (only once)
-			await this.discordBot.sendNotification(sessionId, {
-				type: 'limit',
-				sessionId,
-				sessionName: (await this.sessionManager.getSession(sessionId))?.name || sessionId,
-				message: 'Usage limit reached. Will automatically continue when limit resets.',
-				metadata: {
-					resetTime: resetTime || 'Monitoring for availability',
-					detectedAt: new Date().toISOString(),
-				},
-			});
-
-			// Update session status
-			await this.sessionManager.updateSession(sessionId, { status: 'waiting' });
 		}
+
+		// Immediate continuation failed or already attempted - schedule for later
+		const resetTime = this.extractResetTime(output);
+		if (resetTime) {
+			const resetDateTime = await this.parseResetTime(resetTime);
+			if (resetDateTime) {
+				sessionState.scheduledResetTime = resetDateTime;
+				logger.info(`Scheduled continuation for ${resetDateTime.toLocaleString()}`);
+			}
+		}
+
+		// Send Discord notification (only once)
+		await this.discordBot.sendNotification(sessionId, {
+			type: 'limit',
+			sessionId,
+			sessionName: (await this.sessionManager.getSession(sessionId))?.name || sessionId,
+			message: 'Usage limit reached. Will automatically continue when limit resets.',
+			metadata: {
+				resetTime: resetTime || 'Monitoring for availability',
+				detectedAt: new Date().toISOString(),
+			},
+		});
+
+		// Update session status
+		await this.sessionManager.updateSession(sessionId, { status: 'waiting' });
 	}
 
 	private async handleContinuationReady(sessionId: string, output: string): Promise<void> {
@@ -531,6 +531,7 @@ export class Monitor extends EventEmitter {
 			sessionState.lastContinuationTime = new Date();
 			sessionState.awaitingContinuation = false;
 			sessionState.scheduledResetTime = undefined;
+			sessionState.immediateContinueAttempted = false; // Reset for next limit detection
 
 			// Update session status
 			await this.sessionManager.updateSession(sessionId, { status: 'active' });
