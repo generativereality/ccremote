@@ -46,10 +46,11 @@ export class DaemonManager {
 				await Promise.race([
 					this.initPromise,
 					new Promise((_, reject) =>
-						setTimeout(() => reject(new Error('Daemon initialization timeout')), 10000)
-					)
+						setTimeout(() => reject(new Error('Daemon initialization timeout')), 10000),
+					),
 				]);
-			} catch (error) {
+			}
+			catch (error) {
 				console.warn('Daemon initialization failed or timed out:', error instanceof Error ? error.message : error);
 			}
 			this.initPromise = null;

@@ -94,8 +94,8 @@ export class TmuxManager {
 			await Promise.race([
 				execAsync(command),
 				new Promise((_, reject) =>
-					setTimeout(() => reject(new Error('Timeout')), 5000)
-				)
+					setTimeout(() => reject(new Error('Timeout')), 5000),
+				),
 			]);
 			return true;
 		}
