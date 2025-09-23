@@ -83,6 +83,10 @@ ccremote                                 # Default command (same as 'ccremote st
 ccremote start                           # Auto-generated name
 ccremote start --name "my-session"       # Custom name
 
+# Schedule daily quota window alignment
+ccremote schedule --time "5:00"          # Schedule daily 5 AM quota window
+ccremote schedule --time "7:30am"        # Schedule daily 7:30 AM quota window
+
 # Resume sessions
 ccremote resume --session ccremote-1     # Resume a specific session
 ccremote resume --dry-run               # Preview what would be resumed

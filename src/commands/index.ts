@@ -5,13 +5,14 @@ import { cleanCommand } from './clean.ts';
 import { initCommand } from './init.ts';
 import { listCommand } from './list.ts';
 import { resumeCommand } from './resume.ts';
+import { scheduleCommand } from './schedule.ts';
 import { setupTmuxCommand } from './setup-tmux.ts';
 import { startCommand } from './start.ts';
 import { statusCommand } from './status.ts';
 import { stopCommand } from './stop.ts';
 
 // Re-export all commands for easy importing
-export { cleanCommand, initCommand, listCommand, resumeCommand, setupTmuxCommand, startCommand, statusCommand, stopCommand };
+export { cleanCommand, initCommand, listCommand, resumeCommand, scheduleCommand, setupTmuxCommand, startCommand, statusCommand, stopCommand };
 
 /**
  * Command entries as tuple array
@@ -25,6 +26,7 @@ export const subCommandUnion = [
 	['stop', stopCommand],
 	['status', statusCommand],
 	['clean', cleanCommand],
+	['schedule', scheduleCommand],
 ] as const;
 
 /**

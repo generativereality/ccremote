@@ -109,6 +109,67 @@ ccremote start --name "test" --command "claude --debug"
 
 ---
 
+## `ccremote schedule`
+
+Schedule daily quota window alignment with early dummy commands.
+
+```bash
+ccremote schedule --time <time> [options]
+```
+
+### Options
+
+```bash
+--time <time>       Time to start daily quota window (required)
+                    Formats: "5:00", "5am", "17:30", "7:30pm"
+```
+
+### Examples
+
+```bash
+# Schedule daily 5 AM quota window
+ccremote schedule --time "5:00"
+
+# Schedule daily 7:30 AM quota window
+ccremote schedule --time "7:30am"
+
+# Schedule daily 5 PM quota window
+ccremote schedule --time "17:00"
+```
+
+### What it does
+
+1. Creates a special quota scheduling session
+2. Stages a message to be sent at the specified time daily
+3. Shows session details for 5 seconds
+4. Attaches you to the Claude Code session
+5. **After 5 seconds**: The message appears typed in the session
+6. **At scheduled time**: Message is sent to Claude Code automatically
+7. **Daily recurrence**: Automatically schedules next day's execution
+
+### How It Works
+
+The schedule command optimizes your daily Claude Code usage by:
+
+- **Early quota window start**: Sends a dummy message at your specified time (e.g., 5 AM)
+- **Quota alignment**: Aligns your 5-hour usage windows with your workday
+- **3 effective windows**: Instead of 2 usable windows, you get 3 throughout the day
+- **Set and forget**: Runs automatically every day without intervention
+
+### Example Workflow
+
+```bash
+# Schedule 5 AM daily quota window
+ccremote schedule --time "5:00"
+
+# Your quota windows become:
+# Window 1: 5:00 AM - 10:00 AM (early start)
+# Window 2: 10:00 AM - 3:00 PM (work hours)
+# Window 3: 3:00 PM - 8:00 PM (afternoon/evening)
+```
+
+---
+
 ## `ccremote list`
 
 List all ccremote sessions with their status.

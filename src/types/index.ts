@@ -8,6 +8,11 @@ export type SessionState = {
 	lastActivity: string;
 	projectPath: string; // Track which project this session belongs to
 	workingDirectory: string; // Current working directory when session was created
+	quotaSchedule?: {
+		time: string; // Original time string (e.g., "5:00")
+		command: string; // Command to execute
+		nextExecution: string; // ISO string of next execution time
+	};
 };
 
 export type LimitInfo = {
@@ -46,6 +51,8 @@ export type NotificationMessage = {
 		question?: string;
 		approvalRequested?: boolean;
 		timestamp?: string;
+		nextScheduledExecution?: string;
+		quotaWindowTime?: string;
 	};
 };
 
