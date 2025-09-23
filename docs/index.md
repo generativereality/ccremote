@@ -4,7 +4,7 @@ layout: home
 hero:
   name: ccremote
   text: Claude Code Remote
-  tagline: Remote approvals (Discord), quota auto-continuation, and command scheduling
+  tagline: Remote approvals (Discord), quota-aware auto-continuation, and quota scheduling
   image:
     src: /logo.svg
     alt: ccremote logo

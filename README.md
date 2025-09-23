@@ -1,5 +1,6 @@
 <div align="center">
     <h1>ccremote</h1>
+    <p><strong>Claude Code Remote</strong></p>
 </div>
 
 <p align="center">
