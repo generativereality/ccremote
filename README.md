@@ -18,16 +18,6 @@
 # Install globally (recommended)
 npm install -g ccremote
 
-# Or with bun
-bun install -g ccremote
-
-# Or for development/local linking
-git clone https://github.com/generativereality/ccremote.git
-cd ccremote
-bun install
-bun run build
-bun link  # Or: ln -sf "$PWD/dist/index.js" ~/bin/ccremote
-
 # Initialize configuration interactively
 ccremote init
 ```
@@ -35,13 +25,11 @@ ccremote init
 ### 2. Start Monitoring
 
 ```bash
-# Start with auto-attach to Claude Code (default command)
+# Start with auto-attach to Claude Code
 ccremote
-# or explicitly:
-ccremote start
 
 # Or with custom session name
-ccremote start --name "my-project"
+ccremote start --name "my-session"
 ```
 
 💡 **Pro tip**: `ccremote` without arguments is the same as `ccremote start` - just replace `claude` with `ccremote` in your workflow!
@@ -80,13 +68,11 @@ That's it! You'll be automatically attached to a Claude Code session with monito
 ```bash
 # Initialize configuration (interactive)
 ccremote init                            # Interactive setup (global by default)
-ccremote init --force                    # Overwrite existing config
 
 # Start a new monitored session
 ccremote                                 # Default command (same as 'ccremote start')
 ccremote start                           # Auto-generated name
 ccremote start --name "my-session"       # Custom name
-ccremote start --channel "channel_id"    # Use specific Discord channel
 
 # Resume sessions
 ccremote resume --session ccremote-1     # Resume a specific session
@@ -202,14 +188,18 @@ bun run typecheck                   # Type check with TypeScript
 bun run format                      # Format code (lint --fix)
 bun run release                     # Full release workflow (check + version bump)
 bun run release:test                 # Test package without releasing
+
+# Link local version globally
+bun install
+bun run build
+bun link
 ```
 
 ## Release Process
 
 ### Key Principles
 
-- **Use GitHub PRs**: Never merge to `main` locally - always use GitHub pull requests
-- **Test before merging**: Bump version and test releases (`npm pack` + local install) on feature branches
+- **Test before merging**: Test features (`npm pack` + local install) on feature branches
 - **Publish from main**: Only publish to npm from `main` branch after PR merge
 - **Tag releases**: Create git tags for published versions
 
@@ -222,7 +212,7 @@ bun run release:test                 # Test package without releasing
    - Creates and tests package locally
    - Interactive version bump
    - Publishes to npm and creates git tag
-3. **Bug fixes**: If issues found, fix on main and re-run `bun run release`
+3. **Bug fixes**: If issues found, fix via PR then re-run `bun run release`
 
 ## License
 
