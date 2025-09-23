@@ -63,21 +63,16 @@ export const cleanCommand = define({
 					cleanupSessions.push(session);
 
 					// Check for log files to archive
-					const oldLogPath = `.ccremote/session-${session.id}.log`;
-					const newLogPath = `.ccremote/logs/session-${session.id}.log`;
+					const { getAllSessionLogPaths } = await import('../utils/paths.js');
 
-					try {
-						await fs.access(oldLogPath);
-						archiveLogs.push(oldLogPath);
-					}
-					catch {
-						// Old log doesn't exist, check new location
+					// Check all possible log locations
+					for (const logPath of getAllSessionLogPaths(session.id)) {
 						try {
-							await fs.access(newLogPath);
-							archiveLogs.push(newLogPath);
+							await fs.access(logPath);
+							archiveLogs.push(logPath);
 						}
 						catch {
-							// No log file found
+							// Log doesn't exist at this path
 						}
 					}
 
@@ -104,8 +99,9 @@ export const cleanCommand = define({
 				return;
 			}
 
-			// Create archive directory
-			const archiveDir = '.ccremote/logs/archive';
+			// Create archive directory in global location
+			const { getArchiveDir } = await import('../utils/paths.js');
+			const archiveDir = getArchiveDir();
 			try {
 				await fs.mkdir(archiveDir, { recursive: true });
 			}

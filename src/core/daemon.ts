@@ -288,7 +288,7 @@ export async function startDaemon(): Promise<void> {
 
 		const config: DaemonConfig = {
 			sessionId,
-			logFile: `.ccremote/logs/session-${sessionId}.log`,
+			logFile: process.env.CCREMOTE_LOG_FILE || `.ccremote/logs/session-${sessionId}.log`,
 			discordBotToken: appConfig.discordBotToken,
 			discordOwnerId: appConfig.discordOwnerId,
 			discordAuthorizedUsers: appConfig.discordAuthorizedUsers,

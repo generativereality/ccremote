@@ -162,6 +162,7 @@ export class DaemonManager {
 					...process.env,
 					NODE_ENV: 'production',
 					CCREMOTE_SESSION_ID: config.sessionId, // Pass session ID via environment
+					CCREMOTE_LOG_FILE: config.logFile, // Pass log file path via environment
 				},
 			});
 
@@ -408,8 +409,8 @@ export class DaemonManager {
 	 */
 	private async saveDaemonPids(): Promise<void> {
 		try {
-			// Ensure directory exists
-			await fs.mkdir(join(process.cwd(), '.ccremote'), { recursive: true });
+			// Ensure global directory exists
+			await fs.mkdir(this.globalConfigDir, { recursive: true });
 
 			const pids = Array.from(this.daemons.values()).map(daemon => ({
 				sessionId: daemon.sessionId,
