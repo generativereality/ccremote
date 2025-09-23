@@ -126,20 +126,17 @@ To install ccremote globally for development and testing:
 # Build the project
 bun run build
 
-# Option 1: Use bun link (creates global symlink)
-bun link
-
-# Option 2: Manual symlink (alternative approach)
-mkdir -p ~/bin
-ln -sf "$PWD/dist/index.js" ~/bin/ccremote
-echo 'export PATH="$HOME/bin:$PATH"' >> ~/.zshrc
-source ~/.zshrc
+# Create and install package globally (recommended approach)
+bun run release:test                 # Runs all checks, builds, packages, and installs globally
 
 # Test global installation
 ccremote --help
+
+# After making changes, simply run:
+bun run release:test                 # Rebuilds, repackages, and reinstalls globally
 ```
 
-The symlink approach automatically uses the latest built version when you rebuild with `bun run build`.
+**Note**: Avoid using `bun link` or manual symlinks as they can cause module resolution issues with PM2's internal dependencies when the daemon processes are started.
 
 ### Bundling Notes
 

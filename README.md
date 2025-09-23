@@ -202,10 +202,11 @@ bun run format                      # Format code (lint --fix)
 bun run release                     # Full release workflow (check + version bump)
 bun run release:test                 # Test package without releasing
 
-# Link local version globally
-bun install
-bun run build
-bun link
+# Global development installation (recommended approach)
+bun run release:test                 # Build, package, and install globally
+
+# After making changes, simply run:
+bun run release:test                 # Rebuilds, repackages, and reinstalls globally
 ```
 
 ## Release Process
