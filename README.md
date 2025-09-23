@@ -1,6 +1,5 @@
 <div align="center">
     <h1>ccremote</h1>
-    <p><strong>Claude Code Remote: remote approvals, quota auto-continuation, and command scheduling</strong></p>
 </div>
 
 <p align="center">
@@ -8,7 +7,16 @@
     <a href="https://packagephobia.com/result?p=ccremote"><img src="https://packagephobia.com/badge?p=ccremote" alt="install size" /></a>
 </p>
 
-> Approve prompts from Discord · Continue sessions after quota resets · Align quota windows with your workday
+## Claude Code Remote
+
+1. **Approve prompts from Discord**
+   Approve Claude Code prompts (file edits, shell commands) from Discord, so sessions don’t stall when you’re away.
+
+2. **Continue sessions after quota resets**
+   Detect when a session stops due to quota limits, wait until the 5-hour window resets, then automatically continue.
+
+3. **Align quota windows with your workday**
+   Schedule an early dummy command (e.g. 5 AM) so quota windows align with your workday → effectively 3 usable windows instead of 2.
 
 ## Quick Start
 
