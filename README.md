@@ -223,6 +223,23 @@ bun link
    - Publishes to npm and creates git tag
 3. **Bug fixes**: If issues found, fix via PR then re-run `bun run release`
 
+## Sponsors
+
+* [AI@YourService](https://atyourservice.ai/?utm_source=github&utm_medium=sponsorship&utm_campaign=ccremote)
+
+<div>
+  <a href="https://atyourservice.ai/?utm_source=github&utm_medium=sponsorship&utm_campaign=ccremote">
+    <img src="https://atyourservice.ai/ogimage.png?utm_source=github&utm_medium=sponsorship&utm_campaign=ccremote" alt="AI@YourService" width="300" />
+  </a>
+</div>
+
+## Acknowledgements
+
+Big thanks to the authors and maintainers of:
+
+- **[Claude-Code-Remote](https://github.com/JessyTsui/Claude-Code-Remote)** - Demonstrated that remote control was possible and provided valuable insights into different approaches for remote notifications
+- **[ccusage](https://github.com/ryoppippi/ccusage)** - Great tool that inspired package and repository structure patterns
+
 ## License
 
 MIT
