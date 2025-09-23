@@ -7,9 +7,9 @@
     <a href="https://packagephobia.com/result?p=ccremote"><img src="https://packagephobia.com/badge?p=ccremote" alt="install size" /></a>
 </p>
 
-> Remote Claude Code control with auto-continuation and Discord notifications
+> Claude Code Remote Control
 
-Monitor your Claude Code sessions automatically, continue when usage limits reset, and get Discord notifications when attention is needed.
+Manage approvals via Discord and automatically continue when usage limits reset.
 
 ## Quick Start
 
