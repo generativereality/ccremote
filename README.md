@@ -36,12 +36,16 @@ ccremote init
 ### 2. Start Monitoring
 
 ```bash
-# Start with auto-attach to Claude Code
+# Start with auto-attach to Claude Code (default command)
+ccremote
+# or explicitly:
 ccremote start
 
-# Or with custom session name  
+# Or with custom session name
 ccremote start --name "my-project"
 ```
+
+💡 **Pro tip**: `ccremote` without arguments is the same as `ccremote start` - just replace `claude` with `ccremote` in your workflow!
 
 That's it! You'll be automatically attached to a Claude Code session with monitoring active.
 
@@ -80,15 +84,25 @@ ccremote init                            # Interactive setup (global by default)
 ccremote init --force                    # Overwrite existing config
 
 # Start a new monitored session
+ccremote                                 # Default command (same as 'ccremote start')
 ccremote start                           # Auto-generated name
 ccremote start --name "my-session"       # Custom name
 ccremote start --channel "channel_id"    # Use specific Discord channel
 
+# Resume sessions
+ccremote resume --session ccremote-1     # Resume a specific session
+ccremote resume --dry-run               # Preview what would be resumed
+
 # Manage sessions
 ccremote list                            # List all sessions
+ccremote list --all                      # Include ended sessions
 ccremote status --session ccremote-1     # Show session details
 ccremote stop --session ccremote-1       # Stop session
 ccremote stop --session ccremote-1 --force  # Force stop even if active
+
+# Maintenance commands
+ccremote clean                           # Clean up old session files
+ccremote setup-tmux                      # Configure tmux settings for ccremote
 
 # Manual tmux access (if needed)
 tmux attach -t ccremote-1                # Attach to existing session
@@ -102,13 +116,14 @@ tmux list-sessions                       # List all tmux sessions
 3. **Discord Notifications**: Get real-time updates about your sessions:
    - 🚫 Usage limit reached
    - ✅ Session automatically continued
+   - ❓ Approval requests (Claude Code confirmation dialogs)
    - ❌ Errors or session ended
 4. **Seamless Integration**: Works with your existing Claude Code workflow - the start command automatically attaches you to the session
 
 ## Features
 
 - 🔄 **Automatic Continuation**: Automatically continue your Claude Code sessions when usage limits reset
-- 💬 **Discord Integration**: Real-time notifications via Discord DM or channel
+- 💬 **Discord Integration**: Real-time notifications and approval handling via Discord DM or private channels
 - 📱 **Session Management**: Create, list, monitor, and stop multiple sessions
 - 🖥️ **Tmux Integration**: Seamless tmux session management with proper cleanup
 - 🎯 **Pattern Detection**: Intelligent detection of usage limits, errors, and continuation opportunities
@@ -120,7 +135,7 @@ tmux list-sessions                       # List all tmux sessions
 ccremote supports multiple configuration methods with the following priority (highest to lowest):
 
 1. **Environment variables** (prefixed with `CCREMOTE_`)
-2. **Project config**: `./ccremote.env` 
+2. **Project config**: `./ccremote.env`
 3. **Project config**: `./.env`
 4. **Global config**: `~/.ccremote.env`
 
@@ -180,11 +195,13 @@ bun install
 
 # Development commands
 bun run dev start --name test       # Run in development mode
-bun run check                       # Run tests, lint, type checks etc
+bun run check                       # Run all checks (lint + typecheck + test + build)
 bun run build                       # Build for production
-bun run test                        # Run tests, list,
-bun run lint                        # Lint code
-bun run typecheck                   # Type checking
+bun run test                        # Run tests with vitest
+bun run lint                        # Lint code with ESLint
+bun run typecheck                   # Type check with TypeScript
+bun run format                      # Format code (lint --fix)
+bun run release                     # Full release workflow (check + version bump)
 ```
 
 ## License
