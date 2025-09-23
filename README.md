@@ -202,7 +202,28 @@ bun run lint                        # Lint code with ESLint
 bun run typecheck                   # Type check with TypeScript
 bun run format                      # Format code (lint --fix)
 bun run release                     # Full release workflow (check + version bump)
+bun run release:test                 # Test package without releasing
 ```
+
+## Release Process
+
+### Key Principles
+
+- **Use GitHub PRs**: Never merge to `main` locally - always use GitHub pull requests
+- **Test before merging**: Bump version and test releases (`npm pack` + local install) on feature branches
+- **Publish from main**: Only publish to npm from `main` branch after PR merge
+- **Tag releases**: Create git tags for published versions
+
+### Workflow
+
+1. **Merge features**: All features merged to main via GitHub PRs
+2. **Release**: On main branch, run `bun run release`
+   - Validates you're on main branch
+   - Runs all checks (lint, typecheck, tests, build)
+   - Creates and tests package locally
+   - Interactive version bump
+   - Publishes to npm and creates git tag
+3. **Bug fixes**: If issues found, fix on main and re-run `bun run release`
 
 ## License
 

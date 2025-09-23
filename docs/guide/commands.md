@@ -120,9 +120,8 @@ ccremote list [options]
 ### Options
 
 ```bash
---json              Output in JSON format
---active            Show only active sessions
---inactive          Show only inactive sessions
+--all               Include ended sessions in output
+--json              Output in JSON format (if implemented)
 ```
 
 ### Examples
@@ -252,94 +251,120 @@ ccremote stop --session ccremote-1 --keep-tmux
 
 ---
 
-## `ccremote test-discord`
+## `ccremote resume`
 
-Test Discord bot connection and send a test message.
+Resume monitoring for existing sessions.
 
 ```bash
-ccremote test-discord [options]
+ccremote resume [options]
 ```
 
 ### Options
 
 ```bash
---channel <id>      Send test to specific channel instead of DM
---config <path>     Use specific configuration file
+--session <id>      Specific session to resume (optional)
+--dry-run           Preview what would be resumed without taking action
+--all               Resume all resumable sessions
 ```
 
 ### Examples
 
 ```bash
-# Test DM to configured user
-ccremote test-discord
+# Resume specific session
+ccremote resume --session ccremote-1
 
-# Test message to specific channel
-ccremote test-discord --channel "123456789012345678"
+# Preview what would be resumed
+ccremote resume --dry-run
 
-# Test with specific config file
-ccremote test-discord --config "./test-config.env"
+# Resume all resumable sessions
+ccremote resume --all
 ```
 
 ### What it does
 
-1. Loads Discord configuration
-2. Validates bot token and permissions
-3. Sends test message to configured recipient
-4. Reports success or failure with details
-5. Verifies bot can reach the user/channel
+1. Identifies sessions that can be resumed
+2. Reconnects monitoring to existing tmux sessions
+3. Restarts Discord bot integration
+4. Updates session status tracking
+5. Resumes automated continuation and notifications
 
 ---
 
-## `ccremote config`
+## `ccremote clean`
 
-Show current configuration (with sensitive values redacted).
+Clean up old session files and orphaned tmux sessions.
 
 ```bash
-ccremote config [options]
+ccremote clean [options]
 ```
 
 ### Options
 
 ```bash
---json              Output in JSON format
---show-sensitive    Show sensitive values (⚠️ security risk)
---path              Show configuration file path
+--dry-run           Preview what would be cleaned without taking action
+--force             Clean without confirmation prompts
+--keep-days <n>     Keep sessions newer than N days (default: 7)
 ```
 
 ### Examples
 
 ```bash
-# Show current config
-ccremote config
+# Interactive cleanup
+ccremote clean
 
-# JSON format
-ccremote config --json
+# Preview cleanup actions
+ccremote clean --dry-run
 
-# Show which config file is being used
-ccremote config --path
+# Clean sessions older than 3 days
+ccremote clean --keep-days 3
 ```
 
-### Sample Output
+### What it does
 
+1. Identifies ended or orphaned sessions
+2. Removes old session state files
+3. Cleans up orphaned tmux sessions
+4. Removes temporary monitoring files
+5. Frees up disk space and resources
+
+---
+
+## `ccremote setup-tmux`
+
+Configure tmux settings optimized for ccremote.
+
+```bash
+ccremote setup-tmux [options]
 ```
-ccremote Configuration:
 
-Source: /Users/username/.ccremote.env
+### Options
 
-Discord:
-  Bot Token: ••••••••••••••••••••••••••••••••••••••••••••••••••••••••
-  Owner ID: 123456789012345678
-  Authorized Users: 2 additional users
-
-Monitoring:
-  Interval: 2000ms
-  Max Retries: 3
-  Auto Restart: true
-
-Session:
-  Default Prefix: ccremote
-  Claude Command: claude
+```bash
+--global            Apply settings globally to ~/.tmux.conf
+--local             Apply settings to ./.tmux.conf
+--dry-run           Preview changes without applying them
 ```
+
+### Examples
+
+```bash
+# Interactive setup
+ccremote setup-tmux
+
+# Apply global tmux settings
+ccremote setup-tmux --global
+
+# Preview what would be configured
+ccremote setup-tmux --dry-run
+```
+
+### What it does
+
+1. Configures tmux for optimal ccremote performance
+2. Sets up proper mouse mode and key bindings
+3. Optimizes session management settings
+4. Ensures compatibility with Claude Code
+5. Creates backup of existing configuration
 
 ---
 
@@ -350,11 +375,8 @@ Session:
 Manually attach to an existing session:
 
 ```bash
-# ccremote provides the tmux command
+# Direct tmux command
 tmux attach -t ccremote-1
-
-# Or use ccremote helper
-ccremote attach --session ccremote-1
 ```
 
 ### Detach from Session

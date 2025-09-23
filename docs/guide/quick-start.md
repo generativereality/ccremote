@@ -50,12 +50,17 @@ The setup will walk you through creating a Discord bot:
 Start a monitored Claude Code session:
 
 ```bash
-# Auto-generated session name
+# Default command (same as 'ccremote start')
+ccremote
+
+# Or explicitly:
 ccremote start
 
 # Custom session name
 ccremote start --name "my-project"
 ```
+
+💡 **Pro tip**: `ccremote` without arguments is the same as `ccremote start` - just replace `claude` with `ccremote` in your workflow!
 
 This will:
 1. Create a new tmux session running Claude Code
@@ -135,7 +140,9 @@ Here's a typical ccremote workflow:
 # 1. Initialize (one-time setup)
 ccremote init
 
-# 2. Start a project session
+# 2. Start a project session (either command works)
+ccremote --name "website-redesign"
+# or:
 ccremote start --name "website-redesign"
 
 # 3. Work normally in Claude Code
