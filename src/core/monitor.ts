@@ -3,6 +3,7 @@ import type { SessionManager } from './session.ts';
 import type { TmuxManager } from './tmux.ts';
 import { EventEmitter } from 'node:events';
 import { logger } from './logger.ts';
+import { generateQuotaMessage } from '../utils/quota.ts';
 
 export type MonitoringOptions = {
 	pollInterval?: number; // milliseconds, default 2000
@@ -711,10 +712,14 @@ export class Monitor extends EventEmitter {
 			const nextExecution = await this.parseTimeToNextOccurrence(quotaSchedule.time);
 
 			if (nextExecution) {
-				// Update session with next execution time
+				// Generate new command with updated date
+				const newCommand = generateQuotaMessage(nextExecution);
+
+				// Update session with next execution time and updated command
 				await this.sessionManager.updateSession(sessionId, {
 					quotaSchedule: {
 						...quotaSchedule,
+						command: newCommand,
 						nextExecution: nextExecution.toISOString(),
 					},
 				});

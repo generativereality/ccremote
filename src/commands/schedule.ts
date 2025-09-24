@@ -5,6 +5,7 @@ import { loadConfig, validateConfig } from '../core/config.ts';
 import { daemonManager } from '../core/daemon-manager.ts';
 import { SessionManager } from '../core/session.ts';
 import { TmuxManager } from '../core/tmux.ts';
+import { generateQuotaMessage } from '../utils/quota.ts';
 
 export const scheduleCommand = define({
 	name: 'schedule',
@@ -82,7 +83,7 @@ export const scheduleCommand = define({
 			const delayMinutes = Math.round(delayMs / (1000 * 60));
 
 			// Define the command and add quota schedule metadata to session
-			const command = `🕕 This message will be sent at ${executeAt.toLocaleString()} to ensure the quota window starts at that time.`;
+			const command = generateQuotaMessage(executeAt);
 			const stagingMessage = `# Quota window message scheduled for ${executeAt.toLocaleString()} (in ${delayMinutes} minutes)`;
 
 			await sessionManager.updateSession(session.id, {
