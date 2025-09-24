@@ -1,5 +1,6 @@
 <div align="center">
     <h1>ccremote</h1>
+    <p><strong>Claude Code Remote</strong></p>
 </div>
 
 <p align="center">
@@ -7,9 +8,16 @@
     <a href="https://packagephobia.com/result?p=ccremote"><img src="https://packagephobia.com/badge?p=ccremote" alt="install size" /></a>
 </p>
 
-> Remote Claude Code control with auto-continuation and Discord notifications
+## Claude Code Remote
 
-Monitor your Claude Code sessions automatically, continue when usage limits reset, and get Discord notifications when attention is needed.
+1. **Approve prompts from Discord**
+   Approve Claude Code prompts (file edits, shell commands) from Discord, so sessions don’t stall when you’re away.
+
+2. **Continue sessions after quota resets**
+   Detect when a session stops due to quota limits, wait until the 5-hour window resets, then automatically continue.
+
+3. **Align quota windows with your workday**
+   Schedule an early dummy command (e.g. 5 AM) so quota windows align with your workday → effectively 3 usable windows instead of 2.
 
 ## Quick Start
 
@@ -19,16 +27,6 @@ Monitor your Claude Code sessions automatically, continue when usage limits rese
 # Install globally (recommended)
 npm install -g ccremote
 
-# Or with bun
-bun install -g ccremote
-
-# Or for development/local linking
-git clone https://github.com/generativereality/ccremote.git
-cd ccremote
-bun install
-bun run build
-bun link  # Or: ln -sf "$PWD/dist/index.js" ~/bin/ccremote
-
 # Initialize configuration interactively
 ccremote init
 ```
@@ -37,11 +35,13 @@ ccremote init
 
 ```bash
 # Start with auto-attach to Claude Code
-ccremote start
+ccremote
 
-# Or with custom session name  
-ccremote start --name "my-project"
+# Or with custom session name
+ccremote start --name "my-session"
 ```
+
+💡 **Pro tip**: `ccremote` without arguments is the same as `ccremote start` - just replace `claude` with `ccremote` in your workflow!
 
 That's it! You'll be automatically attached to a Claude Code session with monitoring active.
 
@@ -77,18 +77,30 @@ That's it! You'll be automatically attached to a Claude Code session with monito
 ```bash
 # Initialize configuration (interactive)
 ccremote init                            # Interactive setup (global by default)
-ccremote init --force                    # Overwrite existing config
 
 # Start a new monitored session
+ccremote                                 # Default command (same as 'ccremote start')
 ccremote start                           # Auto-generated name
 ccremote start --name "my-session"       # Custom name
-ccremote start --channel "channel_id"    # Use specific Discord channel
+
+# Schedule daily quota window alignment
+ccremote schedule --time "5:00"          # Schedule daily 5 AM quota window
+ccremote schedule --time "7:30am"        # Schedule daily 7:30 AM quota window
+
+# Resume sessions
+ccremote resume --session ccremote-1     # Resume a specific session
+ccremote resume --dry-run               # Preview what would be resumed
 
 # Manage sessions
 ccremote list                            # List all sessions
+ccremote list --all                      # Include ended sessions
 ccremote status --session ccremote-1     # Show session details
 ccremote stop --session ccremote-1       # Stop session
 ccremote stop --session ccremote-1 --force  # Force stop even if active
+
+# Maintenance commands
+ccremote clean                           # Clean up old session files
+ccremote setup-tmux                      # Configure tmux settings for ccremote
 
 # Manual tmux access (if needed)
 tmux attach -t ccremote-1                # Attach to existing session
@@ -102,13 +114,14 @@ tmux list-sessions                       # List all tmux sessions
 3. **Discord Notifications**: Get real-time updates about your sessions:
    - 🚫 Usage limit reached
    - ✅ Session automatically continued
+   - ❓ Approval requests (Claude Code confirmation dialogs)
    - ❌ Errors or session ended
 4. **Seamless Integration**: Works with your existing Claude Code workflow - the start command automatically attaches you to the session
 
 ## Features
 
 - 🔄 **Automatic Continuation**: Automatically continue your Claude Code sessions when usage limits reset
-- 💬 **Discord Integration**: Real-time notifications via Discord DM or channel
+- 💬 **Discord Integration**: Real-time notifications and approval handling via Discord DM or private channels
 - 📱 **Session Management**: Create, list, monitor, and stop multiple sessions
 - 🖥️ **Tmux Integration**: Seamless tmux session management with proper cleanup
 - 🎯 **Pattern Detection**: Intelligent detection of usage limits, errors, and continuation opportunities
@@ -120,7 +133,7 @@ tmux list-sessions                       # List all tmux sessions
 ccremote supports multiple configuration methods with the following priority (highest to lowest):
 
 1. **Environment variables** (prefixed with `CCREMOTE_`)
-2. **Project config**: `./ccremote.env` 
+2. **Project config**: `./ccremote.env`
 3. **Project config**: `./.env`
 4. **Global config**: `~/.ccremote.env`
 
@@ -180,12 +193,57 @@ bun install
 
 # Development commands
 bun run dev start --name test       # Run in development mode
-bun run check                       # Run tests, lint, type checks etc
+bun run check                       # Run all checks (lint + typecheck + test + build)
 bun run build                       # Build for production
-bun run test                        # Run tests, list,
-bun run lint                        # Lint code
-bun run typecheck                   # Type checking
+bun run test                        # Run tests with vitest
+bun run lint                        # Lint code with ESLint
+bun run typecheck                   # Type check with TypeScript
+bun run format                      # Format code (lint --fix)
+bun run release                     # Full release workflow (check + version bump)
+bun run release:test                 # Test package without releasing
+
+# Global development installation (recommended approach)
+bun run release:test                 # Build, package, and install globally
+
+# After making changes, simply run:
+bun run release:test                 # Rebuilds, repackages, and reinstalls globally
 ```
+
+## Release Process
+
+### Key Principles
+
+- **Test before merging**: Test features (`npm pack` + local install) on feature branches
+- **Publish from main**: Only publish to npm from `main` branch after PR merge
+- **Tag releases**: Create git tags for published versions
+
+### Workflow
+
+1. **Merge features**: All features merged to main via GitHub PRs
+2. **Release**: On main branch, run `bun run release`
+   - Validates you're on main branch
+   - Runs all checks (lint, typecheck, tests, build)
+   - Creates and tests package locally
+   - Interactive version bump
+   - Publishes to npm and creates git tag
+3. **Bug fixes**: If issues found, fix via PR then re-run `bun run release`
+
+## Sponsors
+
+* [AI@YourService](https://atyourservice.ai/?utm_source=github&utm_medium=sponsorship&utm_campaign=ccremote)
+
+<div>
+  <a href="https://atyourservice.ai/?utm_source=github&utm_medium=sponsorship&utm_campaign=ccremote">
+    <img src="https://atyourservice.ai/ogimage.png?utm_source=github&utm_medium=sponsorship&utm_campaign=ccremote" alt="AI@YourService" width="300" />
+  </a>
+</div>
+
+## Acknowledgements
+
+Big thanks to the authors and maintainers of:
+
+- **[Claude-Code-Remote](https://github.com/JessyTsui/Claude-Code-Remote)** - Demonstrated that remote control was possible and provided valuable insights into different approaches for remote notifications
+- **[ccusage](https://github.com/ryoppippi/ccusage)** - Great tool that inspired package and repository structure patterns
 
 ## License
 

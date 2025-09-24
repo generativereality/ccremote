@@ -3,6 +3,7 @@ import type { SessionManager } from './session.ts';
 import type { TmuxManager } from './tmux.ts';
 import { EventEmitter } from 'node:events';
 import { logger } from './logger.ts';
+import { generateQuotaMessage } from '../utils/quota.ts';
 
 export type MonitoringOptions = {
 	pollInterval?: number; // milliseconds, default 2000
@@ -30,6 +31,8 @@ export class Monitor extends EventEmitter {
 		retryCount: number;
 		lastContinuationTime?: Date;
 		scheduledResetTime?: Date;
+		immediateContinueAttempted?: boolean;
+		quotaCommandSent?: boolean;
 	}>();
 
 	// Pattern matching for Claude Code messages
@@ -79,6 +82,8 @@ export class Monitor extends EventEmitter {
 			retryCount: 0,
 			lastContinuationTime: undefined,
 			scheduledResetTime: undefined,
+			immediateContinueAttempted: false,
+			quotaCommandSent: false,
 		});
 
 		// Start polling
@@ -125,6 +130,33 @@ export class Monitor extends EventEmitter {
 					logger.info(`Scheduled reset time arrived, executing continuation for session ${sessionId}`);
 					sessionState.scheduledResetTime = undefined;
 					await this.performAutoContinuation(sessionId);
+					return; // Continue normal monitoring on next poll
+				}
+			}
+
+			// Check for quota schedule
+			if (session.quotaSchedule) {
+				const sessionState = this.sessionStates.get(sessionId);
+				const now = new Date();
+				const nextExecution = new Date(session.quotaSchedule.nextExecution);
+
+				// Send the command early (5 seconds after session starts) so user can see it staged
+				if (!sessionState?.quotaCommandSent) {
+					const sessionAge = now.getTime() - new Date(session.created).getTime();
+					if (sessionAge > 5000) { // 5 seconds after session creation
+						logger.info(`Staging quota command for session ${sessionId} to display in terminal`);
+						// Use sendRawKeys to type the command without automatically adding Enter
+						await this.tmuxManager.sendRawKeys(session.tmuxSession, session.quotaSchedule.command);
+						if (sessionState) {
+							sessionState.quotaCommandSent = true;
+						}
+					}
+				}
+
+				// Execute (send Enter) at the scheduled time
+				if (now >= nextExecution && sessionState?.quotaCommandSent) {
+					logger.info(`Quota schedule time arrived, executing staged command for session ${sessionId}`);
+					await this.executeQuotaSchedule(sessionId, session.quotaSchedule);
 					return; // Continue normal monitoring on next poll
 				}
 			}
@@ -233,51 +265,49 @@ export class Monitor extends EventEmitter {
 
 		this.emit('limit_detected', event);
 
-		// Try to continue immediately first (similar to POC logic)
-		const continueResult = await this.tryImmediateContinuation(sessionId, output);
+		// Only try immediate continuation once per limit detection
+		if (!sessionState.immediateContinueAttempted) {
+			sessionState.immediateContinueAttempted = true;
 
-		if (continueResult.success) {
-			// Continuation succeeded immediately - limit has already reset
-			logger.info(`Immediate continuation successful for session ${sessionId}`);
-			sessionState.lastContinuationTime = new Date();
-			sessionState.awaitingContinuation = false;
+			// Try to continue immediately first (similar to POC logic)
+			const continueResult = await this.tryImmediateContinuation(sessionId, output);
 
-			// Send success notification
-			await this.discordBot.sendNotification(sessionId, {
-				type: 'continued',
-				sessionId,
-				sessionName: (await this.sessionManager.getSession(sessionId))?.name || sessionId,
-				message: 'Session automatically continued after limit reset.',
-			});
+			if (continueResult.success) {
+				// Continuation succeeded immediately - limit has already reset
+				logger.info(`Immediate continuation successful for session ${sessionId} - no notification needed`);
+				sessionState.lastContinuationTime = new Date();
+				sessionState.awaitingContinuation = false;
+				sessionState.immediateContinueAttempted = false; // Reset for next limit detection
 
-			await this.sessionManager.updateSession(sessionId, { status: 'active' });
-		}
-		else {
-			// Continuation failed - schedule for later
-			const resetTime = this.extractResetTime(continueResult.response || output);
-			if (resetTime) {
-				const resetDateTime = await this.parseResetTime(resetTime);
-				if (resetDateTime) {
-					sessionState.scheduledResetTime = resetDateTime;
-					logger.info(`Scheduled continuation for ${resetDateTime.toLocaleString()}`);
-				}
+				await this.sessionManager.updateSession(sessionId, { status: 'active' });
+				return; // Exit early, no notification needed
 			}
-
-			// Send Discord notification (only once)
-			await this.discordBot.sendNotification(sessionId, {
-				type: 'limit',
-				sessionId,
-				sessionName: (await this.sessionManager.getSession(sessionId))?.name || sessionId,
-				message: 'Usage limit reached. Will automatically continue when limit resets.',
-				metadata: {
-					resetTime: resetTime || 'Monitoring for availability',
-					detectedAt: new Date().toISOString(),
-				},
-			});
-
-			// Update session status
-			await this.sessionManager.updateSession(sessionId, { status: 'waiting' });
 		}
+
+		// Immediate continuation failed or already attempted - schedule for later
+		const resetTime = this.extractResetTime(output);
+		if (resetTime) {
+			const resetDateTime = await this.parseResetTime(resetTime);
+			if (resetDateTime) {
+				sessionState.scheduledResetTime = resetDateTime;
+				logger.info(`Scheduled continuation for ${resetDateTime.toLocaleString()}`);
+			}
+		}
+
+		// Send Discord notification (only once)
+		await this.discordBot.sendNotification(sessionId, {
+			type: 'limit',
+			sessionId,
+			sessionName: (await this.sessionManager.getSession(sessionId))?.name || sessionId,
+			message: 'Usage limit reached. Will automatically continue when limit resets.',
+			metadata: {
+				resetTime: resetTime || 'Monitoring for availability',
+				detectedAt: new Date().toISOString(),
+			},
+		});
+
+		// Update session status
+		await this.sessionManager.updateSession(sessionId, { status: 'waiting' });
 	}
 
 	private async handleContinuationReady(sessionId: string, output: string): Promise<void> {
@@ -531,6 +561,7 @@ export class Monitor extends EventEmitter {
 			sessionState.lastContinuationTime = new Date();
 			sessionState.awaitingContinuation = false;
 			sessionState.scheduledResetTime = undefined;
+			sessionState.immediateContinueAttempted = false; // Reset for next limit detection
 
 			// Update session status
 			await this.sessionManager.updateSession(sessionId, { status: 'active' });
@@ -657,6 +688,116 @@ export class Monitor extends EventEmitter {
 		}
 		catch (error) {
 			logger.error(`Failed to parse reset time: ${error} for input: ${timeStr}`);
+			return null;
+		}
+	}
+
+	/**
+	 * Execute a scheduled quota command and schedule the next occurrence
+	 */
+	private async executeQuotaSchedule(sessionId: string, quotaSchedule: { time: string; command: string; nextExecution: string }): Promise<void> {
+		try {
+			const session = await this.sessionManager.getSession(sessionId);
+			if (!session) {
+				return;
+			}
+
+			logger.info(`Executing quota schedule for session ${sessionId}: ${quotaSchedule.command}`);
+
+			// Execute the staged command (just send Enter since command is already typed)
+			await this.tmuxManager.sendRawKeys(session.tmuxSession, 'Enter');
+
+			// Calculate next execution time (same time tomorrow)
+			const now = new Date();
+			const nextExecution = await this.parseTimeToNextOccurrence(quotaSchedule.time);
+
+			if (nextExecution) {
+				// Generate new command with updated date
+				const newCommand = generateQuotaMessage(nextExecution);
+
+				// Update session with next execution time and updated command
+				await this.sessionManager.updateSession(sessionId, {
+					quotaSchedule: {
+						...quotaSchedule,
+						command: newCommand,
+						nextExecution: nextExecution.toISOString(),
+					},
+				});
+
+				// Reset the command sent flag for next day
+				const sessionState = this.sessionStates.get(sessionId);
+				if (sessionState) {
+					sessionState.quotaCommandSent = false;
+				}
+
+				const hoursUntilNext = (nextExecution.getTime() - now.getTime()) / (1000 * 60 * 60);
+				logger.info(`Next quota schedule execution in ${hoursUntilNext.toFixed(1)} hours: ${nextExecution.toLocaleString()}`);
+
+				// Send Discord notification about quota window start
+				await this.discordBot.sendNotification(sessionId, {
+					type: 'continued', // Reuse continued type for quota notifications
+					sessionId,
+					sessionName: session.name,
+					message: `🕕 Daily quota window started! Early command executed to align quota timing.`,
+					metadata: {
+						nextScheduledExecution: nextExecution.toISOString(),
+						quotaWindowTime: quotaSchedule.time,
+						timestamp: new Date().toISOString(),
+					},
+				});
+			}
+
+			logger.info(`Quota schedule executed successfully for session ${sessionId}`);
+		}
+		catch (error) {
+			logger.error(`Failed to execute quota schedule for session ${sessionId}: ${error}`);
+		}
+	}
+
+	/**
+	 * Parse time string to next occurrence (today if future, tomorrow if past)
+	 * Same logic as in schedule command
+	 */
+	private async parseTimeToNextOccurrence(timeStr: string): Promise<Date | null> {
+		try {
+			const now = new Date();
+			timeStr = timeStr.toLowerCase().trim();
+
+			// Match patterns like "5:00", "5am", "17:30", "5:30pm"
+			const timeMatch = timeStr.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/);
+			if (!timeMatch) {
+				return null;
+			}
+
+			const [, hours, minutes, period] = timeMatch;
+			let numHours = Number.parseInt(hours, 10);
+			const numMinutes = minutes ? Number.parseInt(minutes, 10) : 0;
+
+			// Handle AM/PM conversion
+			if (period) {
+				if (period === 'pm' && numHours !== 12) {
+					numHours += 12;
+				}
+				else if (period === 'am' && numHours === 12) {
+					numHours = 0;
+				}
+			}
+
+			// Validate time
+			if (numHours < 0 || numHours > 23 || numMinutes < 0 || numMinutes > 59) {
+				return null;
+			}
+
+			const executeAt = new Date(now);
+			executeAt.setHours(numHours, numMinutes, 0, 0);
+
+			// Always schedule for tomorrow for daily recurrence
+			executeAt.setDate(executeAt.getDate() + 1);
+
+			return executeAt;
+		}
+		catch (error) {
+			logger.error(`Failed to parse time for next occurrence: ${error} for input: ${timeStr}`);
 			return null;
 		}
 	}

@@ -165,6 +165,7 @@ export class Daemon {
 				})();
 			});
 
+
 			// Start monitoring
 			this.log('INFO', 'Starting session monitoring...');
 			await this.monitor.startMonitoring(this.config.sessionId);
@@ -256,6 +257,7 @@ export class Daemon {
 			// Stop monitoring
 			await this.monitor.stopAll();
 
+
 			// Stop Discord bot
 			await this.discordBot.stop();
 
@@ -288,7 +290,7 @@ export async function startDaemon(): Promise<void> {
 
 		const config: DaemonConfig = {
 			sessionId,
-			logFile: `.ccremote/logs/session-${sessionId}.log`,
+			logFile: process.env.CCREMOTE_LOG_FILE || `.ccremote/logs/session-${sessionId}.log`,
 			discordBotToken: appConfig.discordBotToken,
 			discordOwnerId: appConfig.discordOwnerId,
 			discordAuthorizedUsers: appConfig.discordAuthorizedUsers,

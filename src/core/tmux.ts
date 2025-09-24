@@ -90,7 +90,13 @@ export class TmuxManager {
 	async sessionExists(sessionName: string): Promise<boolean> {
 		try {
 			const command = `tmux has-session -t "${sessionName}"`;
-			await execAsync(command);
+			// Add timeout to prevent hanging
+			await Promise.race([
+				execAsync(command),
+				new Promise((_, reject) =>
+					setTimeout(() => reject(new Error('Timeout')), 5000),
+				),
+			]);
 			return true;
 		}
 		catch {

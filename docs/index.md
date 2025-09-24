@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: ccremote
-  text: Remote Claude Code Control
-  tagline: Monitor your Claude Code sessions automatically, continue when usage limits reset, and get Discord notifications when attention is needed
+  text: Claude Code Remote
+  tagline: Remote approvals (Discord), quota-aware auto-continuation, and quota scheduling
   image:
     src: /logo.svg
     alt: ccremote logo
@@ -17,17 +17,17 @@ hero:
       link: https://github.com/generativereality/ccremote
 
 features:
-  - icon: 🔄
-    title: Automatic Continuation
-    details: Automatically continue your Claude Code sessions when usage limits reset - no more manual intervention needed
-    link: /guide/monitoring
   - icon: 💬
-    title: Discord Integration
-    details: Real-time notifications via Discord DM or channel about session status and approval requests
+    title: Remote approvals
+    details: Approve Claude Code prompts (file edits, shell commands) from Discord, so sessions don't stall when you're away.
     link: /guide/discord-setup
-  - icon: 📱
-    title: Session Management
-    details: Create, list, monitor, and stop multiple Claude Code sessions with simple commands
+  - icon: 🔄
+    title: Quota-aware continuation
+    details: Detect when a session stops due to quota limits, wait until the 5-hour window resets, then automatically continue.
+    link: /guide/monitoring
+  - icon: ⏰
+    title: Quota scheduling
+    details: Schedule an early dummy command (e.g. 5 AM) so quota windows align with your workday → effectively 3 usable windows instead of 2.
     link: /guide/commands
   - icon: 🖥️
     title: Tmux Integration
@@ -70,8 +70,8 @@ npm install -g ccremote
 # Interactive setup
 ccremote init
 
-# Start monitoring a session
-ccremote start --name "my-project"
+# Start a monitored Claude Code session
+ccremote
 ```
 
 That's it! You'll be automatically attached to a Claude Code session with monitoring active.

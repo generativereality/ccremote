@@ -41,7 +41,18 @@ export class DaemonManager {
 	 */
 	async ensureInitialized(): Promise<void> {
 		if (this.initPromise) {
-			await this.initPromise;
+			// Add timeout to prevent hanging during initialization
+			try {
+				await Promise.race([
+					this.initPromise,
+					new Promise((_, reject) =>
+						setTimeout(() => reject(new Error('Daemon initialization timeout')), 10000),
+					),
+				]);
+			}
+			catch (error) {
+				console.warn('Daemon initialization failed or timed out:', error instanceof Error ? error.message : error);
+			}
 			this.initPromise = null;
 		}
 	}
@@ -162,6 +173,7 @@ export class DaemonManager {
 					...process.env,
 					NODE_ENV: 'production',
 					CCREMOTE_SESSION_ID: config.sessionId, // Pass session ID via environment
+					CCREMOTE_LOG_FILE: config.logFile, // Pass log file path via environment
 				},
 			});
 
@@ -331,11 +343,19 @@ export class DaemonManager {
 					stdio: ['ignore', 'pipe', 'pipe'],
 				});
 
+				// Add timeout to prevent hanging
+				const timeout = setTimeout(() => {
+					checkProcess.kill('SIGTERM');
+					resolve(false);
+				}, 5000); // 5 second timeout
+
 				checkProcess.on('close', (code) => {
+					clearTimeout(timeout);
 					resolve(code === 0);
 				});
 
 				checkProcess.on('error', () => {
+					clearTimeout(timeout);
 					resolve(false);
 				});
 			}
@@ -408,8 +428,8 @@ export class DaemonManager {
 	 */
 	private async saveDaemonPids(): Promise<void> {
 		try {
-			// Ensure directory exists
-			await fs.mkdir(join(process.cwd(), '.ccremote'), { recursive: true });
+			// Ensure global directory exists
+			await fs.mkdir(this.globalConfigDir, { recursive: true });
 
 			const pids = Array.from(this.daemons.values()).map(daemon => ({
 				sessionId: daemon.sessionId,

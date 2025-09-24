@@ -2,14 +2,14 @@
   "name": "ccremote",
   "type": "module",
   "version": "0.0.1",
-  "description": "Remote Claude Code control with auto-continuation and Discord approvals",
+  "description": "Claude Code Remote: approve prompts from Discord, auto-continue sessions after quota resets, and schedule quota windows around your workday.",
   "author": "ccremote contributors",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/generativereality/ccremote.git"
   },
-  "homepage": "https://github.com/generativereality/ccremote#readme",
+  "homepage": "https://ccremote.dev",
   "bugs": {
     "url": "https://github.com/generativereality/ccremote/issues"
   },
@@ -41,10 +41,10 @@
     "format": "bun run lint --fix",
     "lint": "eslint --cache .",
     "prepack": "bun run build",
-    "prepublishOnly": "publint",
-    "check": "bun lint && bun typecheck && vitest && bun run build",
-    "release": "echo '🚀 Starting release process...' && git branch --show-current | grep -q '^main$' && bun run check && npm pack && echo '\n📦 Package created. Testing locally...' && npm install -g ./ccremote-*.tgz && ccremote --version && echo '\n✅ Local test passed! Ready to bump version...' && bumpp && npm publish && echo '\n🎉 Release complete!'",
-    "release:test": "bun run check && npm pack && npm install -g ./ccremote-*.tgz && ccremote --version && echo '\n✅ Package tests passed!'",
+    "prepublishOnly": "npx publint",
+    "check": "bun lint && bun typecheck && vitest run && bun run build",
+    "release": "echo '🚀 Starting release process...' && git branch --show-current | grep -q '^main$' && bun run check && npm pack && echo '📦 Package created. Testing locally...' && npm install -g ./ccremote-*.tgz && ccremote --version && echo '✅ Local test passed! Ready to bump version...' && bumpp && npm publish && echo '🎉 Release complete!'",
+    "release:test": "bun run check && npm pack && npm install -g ./ccremote-*.tgz && ccremote --version && echo '✅ Package tests passed!'",
     "start": "bun run ./src/index.ts",
     "test": "vitest",
     "typecheck": "tsc --noEmit",
