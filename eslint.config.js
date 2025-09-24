@@ -8,7 +8,6 @@ export default ryoppippi({
 	},
 	ignores: [
 		'dist/**',
-		'related-repos/**',
 		'.ccremote*/**',
 		'docs/**',
 		'*.config.*',

@@ -165,7 +165,6 @@ export class Daemon {
 				})();
 			});
 
-
 			// Start monitoring
 			this.log('INFO', 'Starting session monitoring...');
 			await this.monitor.startMonitoring(this.config.sessionId);
@@ -256,7 +255,6 @@ export class Daemon {
 		try {
 			// Stop monitoring
 			await this.monitor.stopAll();
-
 
 			// Stop Discord bot
 			await this.discordBot.stop();

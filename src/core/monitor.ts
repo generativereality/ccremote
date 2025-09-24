@@ -2,8 +2,8 @@ import type { DiscordBot } from './discord.ts';
 import type { SessionManager } from './session.ts';
 import type { TmuxManager } from './tmux.ts';
 import { EventEmitter } from 'node:events';
-import { logger } from './logger.ts';
 import { generateQuotaMessage } from '../utils/quota.ts';
+import { logger } from './logger.ts';
 
 export type MonitoringOptions = {
 	pollInterval?: number; // milliseconds, default 2000
