@@ -78,11 +78,13 @@ export class Monitor extends EventEmitter {
 			return;
 		}
 
+		// The DiscordBot.sendNotification method now handles retries internally,
+		// so we just need to catch any final failures to prevent monitoring disruption
 		try {
 			await this.discordBot.sendNotification(sessionId, notification);
 		}
 		catch (error) {
-			logger.warn(`Failed to send Discord notification: ${error instanceof Error ? error.message : String(error)}`);
+			logger.warn(`Failed to send Discord notification after retries: ${error instanceof Error ? error.message : String(error)}`);
 			// Don't throw - continue monitoring even if Discord fails
 		}
 	}

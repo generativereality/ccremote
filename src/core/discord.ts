@@ -1,6 +1,7 @@
 import type { Message, TextChannel } from 'discord.js';
 import type { NotificationMessage } from '../types/index.ts';
 import { ChannelType, Client, Events, GatewayIntentBits, PermissionFlagsBits } from 'discord.js';
+import { safeDiscordOperation, withDiscordRetry } from '../utils/discord-error-handling.ts';
 
 export class DiscordBot {
 	private client: Client;
@@ -30,12 +31,34 @@ export class DiscordBot {
 		this.ownerId = ownerId;
 		this.authorizedUsers = [ownerId, ...authorizedUsers];
 
-		// Set up the ready event listener BEFORE logging in
+		const result = await withDiscordRetry(
+			() => this.performLogin(token),
+			{
+				maxRetries: 3,
+				baseDelayMs: 2000,
+				maxDelayMs: 30000,
+				onRetry: (error, attempt) => {
+					console.warn(`[DISCORD] Login attempt ${attempt} failed: ${error.message}. Retrying...`);
+				},
+			},
+		);
+
+		if (!result.success) {
+			throw result.error || new Error('Discord login failed after retries');
+		}
+
+		if (result.attempts > 1) {
+			console.info(`[DISCORD] Successfully connected after ${result.attempts} attempts`);
+		}
+	}
+
+	private async performLogin(token: string): Promise<void> {
 		return new Promise((resolve, reject) => {
 			// Add timeout to prevent hanging forever
 			const timeout = setTimeout(() => {
+				const error = new Error('Opening handshake has timed out');
 				console.error('[DISCORD] Discord bot login timed out after 30 seconds');
-				reject(new Error('Discord bot login timeout'));
+				reject(error);
 			}, 30000);
 
 			this.client.once(Events.ClientReady, () => {
@@ -147,8 +170,8 @@ export class DiscordBot {
 			return;
 		}
 
-		try {
-			await this.withExponentialBackoff(async () => {
+		await safeDiscordOperation(
+			async () => {
 				const channel = await this.client.channels.fetch(channelId) as TextChannel;
 				if (!channel) {
 					throw new Error(`Discord channel ${channelId} not found`);
@@ -164,11 +187,14 @@ export class DiscordBot {
 						void this.cleanupSessionChannel(sessionId);
 					}, 2000);
 				}
-			}, 'send Discord notification');
-		}
-		catch (error) {
-			console.error('Error sending Discord notification:', error);
-		}
+			},
+			'send Discord notification',
+			{ warn: console.warn, debug: console.info },
+			{
+				maxRetries: 2,
+				baseDelayMs: 1000,
+			},
+		);
 	}
 
 	private formatNotification(notification: NotificationMessage): string {
@@ -256,8 +282,9 @@ export class DiscordBot {
 		}
 
 		console.info(`[DISCORD] Creating new channel in guild: ${this.guildId}`);
-		try {
-			return await this.withExponentialBackoff(async () => {
+
+		const channelId = await safeDiscordOperation(
+			async () => {
 				console.info(`[DISCORD] Fetching guild: ${this.guildId}`);
 				const guild = await this.client.guilds.fetch(this.guildId!);
 				if (!guild) {
@@ -268,9 +295,6 @@ export class DiscordBot {
 				// Create a private text channel named after the session
 				const channelName = `ccremote-${sessionName.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`;
 				console.info(`[DISCORD] Will create channel with name: ${channelName}`);
-
-				// Create channel first, then add permissions later to avoid caching issues
-				console.info(`[DISCORD] Creating basic channel first, then adding permissions...`);
 
 				// Create channel with bot permissions from the start
 				console.info(`[DISCORD] Creating channel with bot access ensured...`);
@@ -329,35 +353,54 @@ export class DiscordBot {
 				this.sessionChannelMap.set(sessionId, channel.id);
 				this.channelSessionMap.set(channel.id, sessionId);
 
-				// Send initial message with retry
-				await this.withExponentialBackoff(async () => {
-					await channel.send(`🚀 **ccremote Session Started**\nSession: ${sessionName} (${sessionId})\n\nI'll send notifications for this session here. This channel is private and only visible to authorized users.`);
-				});
+				// Send initial message
+				await channel.send(`🚀 **ccremote Session Started**\nSession: ${sessionName} (${sessionId})\n\nI'll send notifications for this session here. This channel is private and only visible to authorized users.`);
 
 				return channel.id;
-			}, 'create Discord channel');
+			},
+			'create Discord channel',
+			{ warn: console.warn, debug: console.info },
+			{
+				maxRetries: 2,
+				baseDelayMs: 1500,
+			},
+		);
+
+		if (channelId) {
+			return channelId;
 		}
-		catch (error) {
-			console.warn(`[DISCORD] Failed to create channel in guild, falling back to DM:`, error);
-			return this.createDMChannel(sessionId, sessionName);
-		}
+
+		console.warn(`[DISCORD] Failed to create channel in guild, falling back to DM`);
+		return this.createDMChannel(sessionId, sessionName);
 	}
 
 	private async createDMChannel(sessionId: string, sessionName: string): Promise<string> {
-		return this.withExponentialBackoff(async () => {
-			const owner = await this.client.users.fetch(this.ownerId);
-			const dmChannel = await owner.createDM();
+		const channelId = await safeDiscordOperation(
+			async () => {
+				const owner = await this.client.users.fetch(this.ownerId);
+				const dmChannel = await owner.createDM();
 
-			this.sessionChannelMap.set(sessionId, dmChannel.id);
-			this.channelSessionMap.set(dmChannel.id, sessionId);
+				this.sessionChannelMap.set(sessionId, dmChannel.id);
+				this.channelSessionMap.set(dmChannel.id, sessionId);
 
-			// Send initial message with retry
-			await this.withExponentialBackoff(async () => {
+				// Send initial message
 				await dmChannel.send(`🚀 **ccremote Session Started**\nSession: ${sessionName} (${sessionId})\n\nI'll send notifications for this session here. (Using DM as fallback - no guild available)`);
-			});
 
-			return dmChannel.id;
-		}, 'create Discord DM channel');
+				return dmChannel.id;
+			},
+			'create Discord DM channel',
+			{ warn: console.warn, debug: console.info },
+			{
+				maxRetries: 2,
+				baseDelayMs: 1000,
+			},
+		);
+
+		if (!channelId) {
+			throw new Error('Failed to create DM channel after retries');
+		}
+
+		return channelId;
 	}
 
 	async assignChannelToSession(sessionId: string, channelId: string): Promise<void> {
@@ -424,50 +467,6 @@ export class DiscordBot {
 		});
 	}
 
-	/**
-	 * Execute an operation with exponential backoff retry for rate limits
-	 */
-	private async withExponentialBackoff<T>(
-		operation: () => Promise<T>,
-		operationName?: string,
-		maxRetries = 5,
-		baseDelay = 1000,
-	): Promise<T> {
-		let lastError: Error | undefined;
-
-		for (let attempt = 0; attempt < maxRetries; attempt++) {
-			try {
-				return await operation();
-			}
-			catch (error) {
-				lastError = error as Error;
-				const errorMessage = error instanceof Error ? error.message : String(error);
-
-				// Check if this is a rate limit error or user caching error
-				const isRateLimit = errorMessage.includes('too fast')
-					|| errorMessage.includes('rate limit')
-					|| errorMessage.includes('429');
-
-				const isUserCacheError = errorMessage.includes('not a cached User or Role')
-					|| errorMessage.includes('cached User')
-					|| errorMessage.includes('cached Role');
-
-				if ((!isRateLimit && !isUserCacheError) || attempt === maxRetries - 1) {
-					throw error;
-				}
-
-				// Calculate delay with exponential backoff + jitter
-				const delay = baseDelay * 2 ** attempt + Math.random() * 1000;
-
-				const errorType = isRateLimit ? 'rate limited' : (isUserCacheError ? 'user cache error' : 'unknown error');
-				console.warn(`${operationName || 'Discord operation'} ${errorType} (attempt ${attempt + 1}/${maxRetries}), retrying in ${Math.round(delay)}ms: ${errorMessage}`);
-
-				await new Promise(resolve => setTimeout(resolve, delay));
-			}
-		}
-
-		throw new Error(lastError?.message || 'Maximum retry attempts exceeded');
-	}
 
 	async stop(): Promise<void> {
 		if (this.client) {
