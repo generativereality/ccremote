@@ -58,7 +58,7 @@ export class Daemon {
 	 * Check if Discord bot is available and ready
 	 */
 	private isDiscordAvailable(): boolean {
-		return this.discordBot && this.config.discordBotToken ? true : false;
+		return !!(this.discordBot && this.config.discordBotToken);
 	}
 
 	/**

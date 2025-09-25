@@ -1,3 +1,4 @@
+import type { NotificationMessage } from '../types/index.ts';
 import type { DiscordBot } from './discord.ts';
 import type { SessionManager } from './session.ts';
 import type { TmuxManager } from './tmux.ts';
@@ -72,7 +73,7 @@ export class Monitor extends EventEmitter {
 	/**
 	 * Safely send Discord notification with error handling
 	 */
-	private async safeNotifyDiscord(sessionId: string, notification: any): Promise<void> {
+	private async safeNotifyDiscord(sessionId: string, notification: NotificationMessage): Promise<void> {
 		if (!this.discordBot) {
 			logger.debug('Discord bot not available, skipping notification');
 			return;

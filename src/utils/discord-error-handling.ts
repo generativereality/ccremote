@@ -2,19 +2,19 @@
  * Centralized Discord error handling utilities to avoid DRY violations
  */
 
-export interface DiscordRetryOptions {
+export type DiscordRetryOptions = {
 	maxRetries?: number;
 	baseDelayMs?: number;
 	maxDelayMs?: number;
 	onRetry?: (error: Error, attempt: number) => void;
-}
+};
 
-export interface DiscordRetryResult<T> {
+export type DiscordRetryResult<T> = {
 	success: boolean;
 	result?: T;
 	error?: Error;
 	attempts: number;
-}
+};
 
 /**
  * Check if an error is retryable (network/connection issues)

@@ -32,7 +32,7 @@ export class DiscordBot {
 		this.authorizedUsers = [ownerId, ...authorizedUsers];
 
 		const result = await withDiscordRetry(
-			() => this.performLogin(token),
+			async () => this.performLogin(token),
 			{
 				maxRetries: 3,
 				baseDelayMs: 2000,
@@ -466,7 +466,6 @@ export class DiscordBot {
 			handler(sessionId as string, optionNumber as number);
 		});
 	}
-
 
 	async stop(): Promise<void> {
 		if (this.client) {

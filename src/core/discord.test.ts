@@ -2,8 +2,9 @@
  * Unit tests for Discord bot resilience functionality
  */
 
-import type { Client } from 'discord.js';
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+/* eslint-disable ts/no-unsafe-assignment, ts/no-unsafe-return */
+
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DiscordBot } from './discord.ts';
 
 // Mock discord.js
@@ -16,7 +17,7 @@ vi.mock('discord.js', () => ({
 		user: null,
 		guilds: {
 			cache: { first: vi.fn() },
-			fetch: vi.fn()
+			fetch: vi.fn(),
 		},
 		users: { fetch: vi.fn() },
 		channels: { fetch: vi.fn() },
@@ -48,7 +49,7 @@ vi.mock('../utils/discord-error-handling.ts', () => ({
 	safeDiscordOperation: vi.fn(),
 }));
 
-describe('DiscordBot Resilience', () => {
+describe('discordBot Resilience', () => {
 	let discordBot: DiscordBot;
 	let mockClient: any;
 
