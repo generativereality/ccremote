@@ -69,6 +69,24 @@ export class Monitor extends EventEmitter {
 		};
 	}
 
+	/**
+	 * Safely send Discord notification with error handling
+	 */
+	private async safeNotifyDiscord(sessionId: string, notification: any): Promise<void> {
+		if (!this.discordBot) {
+			logger.debug('Discord bot not available, skipping notification');
+			return;
+		}
+
+		try {
+			await this.discordBot.sendNotification(sessionId, notification);
+		}
+		catch (error) {
+			logger.warn(`Failed to send Discord notification: ${error instanceof Error ? error.message : String(error)}`);
+			// Don't throw - continue monitoring even if Discord fails
+		}
+	}
+
 	async startMonitoring(sessionId: string): Promise<void> {
 		const session = await this.sessionManager.getSession(sessionId);
 		if (!session) {
@@ -295,7 +313,7 @@ export class Monitor extends EventEmitter {
 		}
 
 		// Send Discord notification (only once)
-		await this.discordBot.sendNotification(sessionId, {
+		await this.safeNotifyDiscord(sessionId, {
 			type: 'limit',
 			sessionId,
 			sessionName: (await this.sessionManager.getSession(sessionId))?.name || sessionId,
@@ -490,7 +508,7 @@ export class Monitor extends EventEmitter {
 			: 'No options detected';
 
 		// Send Discord notification
-		await this.discordBot.sendNotification(sessionId, {
+		await this.safeNotifyDiscord(sessionId, {
 			type: 'approval',
 			sessionId,
 			sessionName: (await this.sessionManager.getSession(sessionId))?.name || sessionId,
@@ -567,7 +585,7 @@ export class Monitor extends EventEmitter {
 			await this.sessionManager.updateSession(sessionId, { status: 'active' });
 
 			// Send notification
-			await this.discordBot.sendNotification(sessionId, {
+			await this.safeNotifyDiscord(sessionId, {
 				type: 'continued',
 				sessionId,
 				sessionName: session.name,
@@ -734,7 +752,7 @@ export class Monitor extends EventEmitter {
 				logger.info(`Next quota schedule execution in ${hoursUntilNext.toFixed(1)} hours: ${nextExecution.toLocaleString()}`);
 
 				// Send Discord notification about quota window start
-				await this.discordBot.sendNotification(sessionId, {
+				await this.safeNotifyDiscord(sessionId, {
 					type: 'continued', // Reuse continued type for quota notifications
 					sessionId,
 					sessionName: session.name,

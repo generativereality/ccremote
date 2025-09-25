@@ -55,6 +55,13 @@ export class Daemon {
 	}
 
 	/**
+	 * Check if Discord bot is available and ready
+	 */
+	private isDiscordAvailable(): boolean {
+		return this.discordBot && this.config.discordBotToken ? true : false;
+	}
+
+	/**
 	 * Start the daemon process
 	 */
 	async start(): Promise<void> {
@@ -104,24 +111,37 @@ export class Daemon {
 				this.log('INFO', 'Discord bot started successfully');
 			}
 			catch (error) {
-				this.log('ERROR', `Discord bot failed to start: ${error}`);
-				throw error;
+				this.log('WARN', `Discord bot failed to start: ${error}`);
+				this.log('WARN', 'Continuing without Discord notifications - session monitoring will still work');
+				// Don't throw - continue with monitoring even if Discord fails
 			}
 
-			// Give Discord bot a moment to fully initialize before creating channels
-			this.log('INFO', 'Waiting 1 second for Discord bot to fully initialize...');
-			await new Promise(resolve => setTimeout(resolve, 1000));
+			// Only set up Discord channel if bot started successfully
+			if (this.discordBot && this.config.discordBotToken) {
+				try {
+					// Give Discord bot a moment to fully initialize before creating channels
+					this.log('INFO', 'Waiting 1 second for Discord bot to fully initialize...');
+					await new Promise(resolve => setTimeout(resolve, 1000));
 
-			// Set up Discord channel if provided
-			if (this.config.discordChannelId) {
-				this.log('INFO', `Using existing Discord channel: ${this.config.discordChannelId}`);
-				await this.discordBot.assignChannelToSession(this.config.sessionId, this.config.discordChannelId);
+					// Set up Discord channel if provided
+					if (this.config.discordChannelId) {
+						this.log('INFO', `Using existing Discord channel: ${this.config.discordChannelId}`);
+						await this.discordBot.assignChannelToSession(this.config.sessionId, this.config.discordChannelId);
+					}
+					else {
+						this.log('INFO', `Creating new Discord channel for session: ${session.name}`);
+						const channelId = await this.discordBot.createOrGetChannel(this.config.sessionId, session.name);
+						this.log('INFO', `Created Discord channel: ${channelId}`);
+						await this.sessionManager.updateSession(this.config.sessionId, { channelId });
+					}
+				}
+				catch (error) {
+					this.log('WARN', `Failed to set up Discord channel: ${error}`);
+					this.log('WARN', 'Continuing without Discord channel - notifications will be skipped');
+				}
 			}
 			else {
-				this.log('INFO', `Creating new Discord channel for session: ${session.name}`);
-				const channelId = await this.discordBot.createOrGetChannel(this.config.sessionId, session.name);
-				this.log('INFO', `Created Discord channel: ${channelId}`);
-				await this.sessionManager.updateSession(this.config.sessionId, { channelId });
+				this.log('INFO', 'Skipping Discord channel setup - bot not available');
 			}
 
 			// Set up monitoring event handlers
@@ -141,29 +161,34 @@ export class Daemon {
 				this.log('ERROR', `Monitor error for session ${event.sessionId}: ${event.data?.error || 'Unknown error'}`);
 			});
 
-			// Set up Discord option selection handler
-			this.discordBot.onOptionSelected((sessionId: string, optionNumber: number) => {
-				this.log('INFO', `Discord option selected: ${optionNumber} for session ${sessionId}`);
+			// Set up Discord option selection handler (only if Discord is available)
+			if (this.isDiscordAvailable()) {
+				this.discordBot.onOptionSelected((sessionId: string, optionNumber: number) => {
+					this.log('INFO', `Discord option selected: ${optionNumber} for session ${sessionId}`);
 
-				// Handle async operations
-				void (async () => {
-					try {
-						// Send the option selection to tmux session
-						const sessionData = await this.sessionManager.getSession(sessionId);
-						if (sessionData) {
-							await this.tmuxManager.sendOptionSelection(sessionData.tmuxSession, optionNumber);
+					// Handle async operations
+					void (async () => {
+						try {
+							// Send the option selection to tmux session
+							const sessionData = await this.sessionManager.getSession(sessionId);
+							if (sessionData) {
+								await this.tmuxManager.sendOptionSelection(sessionData.tmuxSession, optionNumber);
 
-							// Update session status back to active
-							await this.sessionManager.updateSession(sessionId, { status: 'active' });
+								// Update session status back to active
+								await this.sessionManager.updateSession(sessionId, { status: 'active' });
 
-							this.log('INFO', `Sent option ${optionNumber} to tmux session ${sessionData.tmuxSession}`);
+								this.log('INFO', `Sent option ${optionNumber} to tmux session ${sessionData.tmuxSession}`);
+							}
 						}
-					}
-					catch (error) {
-						this.log('ERROR', `Failed to send option selection: ${error instanceof Error ? error.message : String(error)}`);
-					}
-				})();
-			});
+						catch (error) {
+							this.log('ERROR', `Failed to send option selection: ${error instanceof Error ? error.message : String(error)}`);
+						}
+					})();
+				});
+			}
+			else {
+				this.log('INFO', 'Skipping Discord option selection handler - Discord not available');
+			}
 
 			// Start monitoring
 			this.log('INFO', 'Starting session monitoring...');
@@ -213,17 +238,19 @@ export class Daemon {
 					// Update session status to ended
 					await this.sessionManager.updateSession(this.config.sessionId, { status: 'ended' });
 
-					// Notify via Discord that session has ended
-					try {
-						await this.discordBot.sendNotification(this.config.sessionId, {
-							type: 'session_ended',
-							sessionId: this.config.sessionId,
-							sessionName: session.name,
-							message: `Session **${session.name}** has ended. The tmux session was closed.`,
-						});
-					}
-					catch (error) {
-						this.log('ERROR', `Failed to send session end notification: ${error instanceof Error ? error.message : String(error)}`);
+					// Notify via Discord that session has ended (if Discord is available)
+					if (this.isDiscordAvailable()) {
+						try {
+							await this.discordBot.sendNotification(this.config.sessionId, {
+								type: 'session_ended',
+								sessionId: this.config.sessionId,
+								sessionName: session.name,
+								message: `Session **${session.name}** has ended. The tmux session was closed.`,
+							});
+						}
+						catch (error) {
+							this.log('WARN', `Failed to send session end notification: ${error instanceof Error ? error.message : String(error)}`);
+						}
 					}
 
 					break;
@@ -256,8 +283,15 @@ export class Daemon {
 			// Stop monitoring
 			await this.monitor.stopAll();
 
-			// Stop Discord bot
-			await this.discordBot.stop();
+			// Stop Discord bot (if available)
+			if (this.isDiscordAvailable()) {
+				try {
+					await this.discordBot.stop();
+				}
+				catch (error) {
+					this.log('WARN', `Error stopping Discord bot: ${error instanceof Error ? error.message : String(error)}`);
+				}
+			}
 
 			this.log('INFO', 'Daemon shut down successfully');
 		}
