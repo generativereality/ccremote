@@ -57,9 +57,10 @@ ccremote is a CLI tool that provides remote control for Claude Code sessions wit
 ### Key Patterns
 
 **Session Management**
-- Sessions stored in `.ccremote/sessions.json`
+- **Sessions**: Global user directory `~/.ccremote/sessions.json` (shared across all projects)
 - Auto-generated IDs: `ccremote-1`, `ccremote-2`, etc.
 - Status tracking: `active`, `waiting`, `waiting_approval`, `ended`
+- **Logs**: Global user directory `~/.ccremote/logs/` with project-specific naming: `{projectName}-{sessionId}.log`
 
 **Pattern Detection**
 - Usage limit detection: `/(?:5-hour limit reached.*resets|usage limit.*resets)/i`

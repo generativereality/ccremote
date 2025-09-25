@@ -320,9 +320,14 @@ export async function startDaemon(): Promise<void> {
 		const { loadConfig } = await import('./config.js');
 		const appConfig = loadConfig();
 
+		if (!process.env.CCREMOTE_LOG_FILE) {
+			console.error('CCREMOTE_LOG_FILE environment variable is required');
+			process.exit(1);
+		}
+
 		const config: DaemonConfig = {
 			sessionId,
-			logFile: process.env.CCREMOTE_LOG_FILE || `.ccremote/logs/session-${sessionId}.log`,
+			logFile: process.env.CCREMOTE_LOG_FILE,
 			discordBotToken: appConfig.discordBotToken,
 			discordOwnerId: appConfig.discordOwnerId,
 			discordAuthorizedUsers: appConfig.discordAuthorizedUsers,
