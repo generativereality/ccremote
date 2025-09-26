@@ -26,6 +26,7 @@ export type DaemonConfig = {
 	discordAuthorizedUsers?: string[];
 	discordChannelId?: string;
 	monitoringOptions: MonitoringOptions;
+	discordHealthCheckInterval?: number;
 };
 
 export class Daemon {
@@ -107,6 +108,7 @@ export class Daemon {
 					this.config.discordBotToken,
 					this.config.discordOwnerId,
 					this.config.discordAuthorizedUsers || [],
+					this.config.discordHealthCheckInterval,
 				);
 				this.log('INFO', 'Discord bot started successfully');
 			}

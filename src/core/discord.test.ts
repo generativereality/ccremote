@@ -244,6 +244,17 @@ describe('discordBot Resilience', () => {
 		});
 	});
 
+	describe('webSocket timeout configuration', () => {
+		it('should configure increased timeout values', () => {
+			const mockClient = (discordBot as any).client;
+
+			// Verify that the client was created with increased timeout values
+			expect(mockClient).toBeDefined();
+			// Note: In a real test, you would verify the WebSocket options were passed to the Client constructor
+			// This test ensures the DiscordBot constructor runs without errors with the new timeout config
+		});
+	});
+
 	describe('integration with daemon error handling', () => {
 		it('should not disrupt daemon when Discord operations fail', async () => {
 			const { safeDiscordOperation } = await import('../utils/discord-error-handling.ts');

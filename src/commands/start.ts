@@ -197,6 +197,7 @@ export const startCommand = define({
 				discordOwnerId: config.discordOwnerId,
 				discordAuthorizedUsers: config.discordAuthorizedUsers,
 				discordChannelId: channel,
+				discordHealthCheckInterval: config.discordHealthCheckInterval,
 				monitoringOptions: {
 					pollInterval: config.monitoringInterval,
 					maxRetries: config.maxRetries,

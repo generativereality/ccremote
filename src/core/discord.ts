@@ -11,6 +11,9 @@ export class DiscordBot {
 	private channelSessionMap = new Map<string, string>(); // channelId -> sessionId
 	private guildId: string | null = null; // Store the guild where channels should be created
 	private isReady = false;
+	private token: string = '';
+	private healthCheckInterval: NodeJS.Timeout | null = null;
+	private lastHealthCheckTime = new Date();
 
 	constructor() {
 		this.client = new Client({
@@ -20,14 +23,22 @@ export class DiscordBot {
 				GatewayIntentBits.MessageContent,
 				GatewayIntentBits.DirectMessages,
 			],
+			// eslint-disable-next-line ts/no-unsafe-assignment
+			ws: {
+				// Increase WebSocket timeout values to handle unreliable network conditions
+				handshakeTimeout: 60000, // 60 seconds (default: 30000)
+				helloTimeout: 120000, // 2 minutes (default: 60000)
+				readyTimeout: 30000, // 30 seconds (default: 15000)
+			} as any,
 		});
 
 		this.setupEventHandlers();
 	}
 
-	async start(token: string, ownerId: string, authorizedUsers: string[] = []): Promise<void> {
+	async start(token: string, ownerId: string, authorizedUsers: string[] = [], healthCheckInterval?: number): Promise<void> {
 		console.info('[DISCORD] start() method called');
 		console.info(`[DISCORD] Starting Discord bot with owner: ${ownerId}, authorized users: ${authorizedUsers.join(', ')}`);
+		this.token = token; // Store token for reconnection attempts
 		this.ownerId = ownerId;
 		this.authorizedUsers = [ownerId, ...authorizedUsers];
 
@@ -50,6 +61,9 @@ export class DiscordBot {
 		if (result.attempts > 1) {
 			console.info(`[DISCORD] Successfully connected after ${result.attempts} attempts`);
 		}
+
+		// Start periodic health check
+		this.startHealthCheck(healthCheckInterval);
 	}
 
 	private async performLogin(token: string): Promise<void> {
@@ -467,7 +481,129 @@ export class DiscordBot {
 		});
 	}
 
+	/**
+	 * Start periodic health check (every hour by default)
+	 */
+	private startHealthCheck(intervalMs: number = 60 * 60 * 1000): void {
+		console.info(`[DISCORD] Starting health check with ${intervalMs / 60000} minute interval`);
+
+		// Clear any existing interval
+		this.stopHealthCheck();
+
+		this.healthCheckInterval = setInterval(() => {
+			void this.performHealthCheck();
+		}, intervalMs);
+
+		// Also update the last health check time
+		this.lastHealthCheckTime = new Date();
+	}
+
+	/**
+	 * Stop the periodic health check
+	 */
+	private stopHealthCheck(): void {
+		if (this.healthCheckInterval) {
+			clearInterval(this.healthCheckInterval);
+			this.healthCheckInterval = null;
+		}
+	}
+
+	/**
+	 * Perform a health check and attempt reconnection if needed
+	 */
+	private async performHealthCheck(): Promise<void> {
+		try {
+			this.lastHealthCheckTime = new Date();
+
+			if (!this.isHealthy()) {
+				console.warn('[DISCORD] Health check failed - bot appears disconnected');
+				await this.attemptReconnection();
+			}
+			else {
+				console.info('[DISCORD] Health check passed - bot is connected');
+			}
+		}
+		catch (error) {
+			console.error(`[DISCORD] Health check error: ${error instanceof Error ? error.message : String(error)}`);
+			await this.attemptReconnection();
+		}
+	}
+
+	/**
+	 * Check if Discord bot is healthy (connected and ready)
+	 */
+	public isHealthy(): boolean {
+		return this.isReady
+			&& this.client
+			&& this.client.readyTimestamp !== null
+			&& this.client.ws.status === 0; // 0 = READY
+	}
+
+	/**
+	 * Attempt to reconnect Discord bot
+	 */
+	private async attemptReconnection(): Promise<void> {
+		console.info('[DISCORD] Attempting to reconnect...');
+
+		try {
+			// Mark as not ready
+			this.isReady = false;
+
+			// Destroy existing client if it exists
+			if (this.client && typeof this.client.destroy === 'function') {
+				console.info('[DISCORD] Destroying existing client');
+				await this.client.destroy();
+			}
+
+			// Create new client with same configuration
+			this.client = new Client({
+				intents: [
+					GatewayIntentBits.Guilds,
+					GatewayIntentBits.GuildMessages,
+					GatewayIntentBits.MessageContent,
+					GatewayIntentBits.DirectMessages,
+				],
+				// eslint-disable-next-line ts/no-unsafe-assignment
+				ws: {
+					// Same timeout values as original
+					handshakeTimeout: 60000,
+					helloTimeout: 120000,
+					readyTimeout: 30000,
+				} as any,
+			});
+
+			// Setup event handlers again
+			this.setupEventHandlers();
+
+			// Attempt login with retry logic
+			const result = await withDiscordRetry(
+				async () => this.performLogin(this.token),
+				{
+					maxRetries: 3,
+					baseDelayMs: 2000,
+					maxDelayMs: 30000,
+					onRetry: (error, attempt) => {
+						console.warn(`[DISCORD] Reconnection attempt ${attempt} failed: ${error.message}. Retrying...`);
+					},
+				},
+			);
+
+			if (result.success) {
+				console.info('[DISCORD] Successfully reconnected to Discord');
+			}
+			else {
+				console.error('[DISCORD] Failed to reconnect after all retries');
+			}
+		}
+		catch (error) {
+			console.error(`[DISCORD] Reconnection failed: ${error instanceof Error ? error.message : String(error)}`);
+		}
+	}
+
 	async stop(): Promise<void> {
+		// Stop health check first
+		this.stopHealthCheck();
+
 		if (this.client) {
 			await this.client.destroy();
 			this.isReady = false;

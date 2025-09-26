@@ -117,6 +117,7 @@ export const scheduleCommand = define({
 				discordBotToken: config.discordBotToken,
 				discordOwnerId: config.discordOwnerId,
 				discordAuthorizedUsers: config.discordAuthorizedUsers,
+				discordHealthCheckInterval: config.discordHealthCheckInterval,
 				monitoringOptions: {
 					pollInterval: config.monitoringInterval,
 					maxRetries: config.maxRetries,
