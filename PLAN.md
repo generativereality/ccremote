@@ -1,164 +1,151 @@
-# 🚀 ccremote Development Plan
+# ccremote Development Plan
 
-## 📋 **Project Overview**
+## Overview
 
-**ccremote** is a minimalistic Claude Code remote control package that provides automated continuation and Discord notifications. Built on modern, simple architecture inspired by ccusage, it focuses exclusively on tmux monitoring-based features without dependency on Claude Code hooks or complex integrations.
+ccremote is a CLI tool that provides remote control for Claude Code sessions with Discord integration. It monitors Claude Code sessions via tmux, automatically continues them when usage limits reset, and provides Discord notifications for session events and approval requests.
 
----
-
-## 🏗️ **Implementation Status**
-
-### **✅ COMPLETED - Phase 1: Core Monitoring System**
-
-- **✅ Interactive Configuration**: `ccremote init` with Discord bot setup guidance
-- **✅ Seamless Session Management**: `ccremote start` auto-attaches to Claude Code
-- **✅ Auto-Continuation**: Smart tmux monitoring with limit detection and automatic resumption
-- **✅ Discord Integration**: Private bot notifications with real-time status updates
-- **✅ Clean Session Handling**: Background monitoring with log file output redirection
-- **✅ Configuration System**: Multi-level config with dotenv support and CCREMOTE_ prefixes
-
-### **✅ Core Architecture Implemented:**
-
-- **Session Management**: Complete session lifecycle with tmux integration
-- **Discord Bot**: Real-time notifications, DM channels, approval framework
-- **Monitoring System**: Event-driven tmux polling with smart limit detection
-- **Configuration**: Interactive setup, environment variable management
-- **CLI Interface**: Gunshi-based commands (init, start, stop, list, status)
-
-### **✅ Key Features Working:**
-
-- **One-Command Workflow**: `ccremote start` → tmux session → Claude Code running
-- **Smart Output Routing**: Console output pre-attach, log files during session
-- **Background Monitoring**: Invisible monitoring with 2-second polling intervals
-- **Discord Notifications**: Limit detection, auto-continuation, error reporting
-- **Session Persistence**: State management with `.ccremote/sessions.json`
+**Current Status:** v0.1.0 released with core monitoring, auto-continuation, and Discord approval system working in production.
 
 ---
 
-## 🎯 **Next Development Phases**
+## Next Release: v0.2.0 - Remote Control Features
 
-### **✅ Phase 2: Enhanced Monitoring & Remote Approvals - COMPLETE**
+### Planned Features
 
-#### **Status: 100% COMPLETE** ✅
-- **✅ Approval Detection**: Complete with real tmux fixtures and robust pattern matching
-- **✅ Remote Approvals**: Full Discord workflow with numeric option selection (1, 2, 3, etc.)
-- **✅ Smart Continuation**: Enhanced limit detection patterns working in production
-- **✅ Session Recovery**: Automatic session recovery implemented
-- **✅ Multi-Option Support**: Supports any number of options (1, 2, 3+) with proper tmux injection
-- **✅ Advanced Channel Management**: Dedicated Discord channels per session with reuse capability
+#### 1. Discord-to-Claude Command System
+**Priority: High**
 
-#### **✅ All Features Implemented:**
-1. **✅ DONE - Approval Pattern Detection**: Complete with comprehensive tmux fixtures
-2. **✅ DONE - Discord Command Handling**: Full numeric option workflow (1, 2, 3, etc.)
-3. **✅ DONE - Multi-Option Support**: Extended beyond binary to support unlimited options
-4. **✅ DONE - Enhanced Pattern Matching**: Robust limit detection working
-5. **✅ DONE - Channel Assignment**: Dedicated channels for different projects/sessions
+Send commands from Discord directly to Claude Code sessions.
 
-### **⏰ Phase 3: Smart Scheduling & Window Optimization**
+**Implementation:**
+- New Discord command: `/send <command>`
+- Security-first design with command validation whitelist
+- Rate limiting (5 commands/minute per user)
+- Full audit logging for all executed commands
+- Session-scoped execution (commands only work in session's Discord channel)
 
-#### **Targets:**
-- **Early Window Scheduling**: 3-5am dummy commands to optimize daily usage windows
-- **Sleep/Wake Handling**: Robust scheduling across laptop sleep cycles
-- **Window Pattern Optimization**: 5am→10am→3pm→8pm daily pattern management
-- **Smart Retry Logic**: Exponential backoff for failed continuations
+**Security Considerations:**
+- Whitelist approach: only safe commands allowed (no `rm`, `sudo`, etc.)
+- Authorization: only authorized users in session-specific channels
+- Command sanitization and validation before execution
 
-#### **Implementation Priority:**
-1. **Scheduler Service**: Cron-like scheduling with event-based execution
-2. **Window Detection**: Track and optimize 5-hour usage windows
-3. **Dummy Command System**: Minimal commands to trigger window starts
-4. **Recovery Mechanisms**: Handle missed schedules after sleep/wake
+#### 2. Task Completion Detection
+**Priority: Medium**
 
-### **📱 Phase 4: Advanced Discord Integration**
+Get notifications when Claude finishes tasks and stops processing.
 
-#### **Targets:**
-- **Rich Discord Embeds**: Enhanced notification formatting with status colors
-- **Interactive Commands**: `status`, `stop`, `restart` commands via Discord DMs
-- **Multi-Session Support**: Manage multiple concurrent sessions via Discord
-- **✅ Channel Assignment**: Dedicated channels for different projects/sessions *(COMPLETE)*
+**Implementation:**
+- Idle detection: no output changes for 10+ seconds
+- Smart pattern matching for Claude's waiting-for-input state
+- New notification type: `task_completed`
+- Debounced notifications to prevent spam
 
-#### **Implementation Priority:**
-1. **Enhanced Discord Bot**: Rich message formatting and interactive commands
-2. **Session Management**: Multi-session Discord interface
-3. **Status Dashboard**: Real-time session status via Discord
-4. **Notification Customization**: User-configurable notification preferences
+**Integration:**
+- Extends existing monitoring system in `src/core/monitor.ts`
+- Uses established Discord notification patterns
 
----
+#### 3. Tmux Output Display ("Screenshots")
+**Priority: Medium**
 
-## 🏗️ **Current Architecture**
+View current tmux session content in Discord as text.
 
-### **Implemented Package Structure:**
+**Implementation:**
+- New Discord command: `/output` or `/screenshot`
+- Monospaced formatting using Discord code blocks
+- Smart message splitting for long output (Discord 2000 char limit)
+- Configurable context (default: last 50 lines)
 
-```
-ccremote/
-├── src/
-│   ├── commands/
-│   │   ├── index.ts              # ✅ CLI entry point with all commands
-│   │   ├── init.ts               # ✅ Interactive configuration setup
-│   │   ├── start.ts              # ✅ Start monitored session with auto-attach
-│   │   ├── stop.ts               # ✅ Stop session management
-│   │   ├── list.ts               # ✅ List active sessions
-│   │   └── status.ts             # ✅ Session status display
-│   ├── core/
-│   │   ├── config.ts             # ✅ Multi-level configuration system
-│   │   ├── session.ts            # ✅ Session lifecycle management
-│   │   ├── tmux.ts               # ✅ Tmux integration & monitoring
-│   │   ├── discord.ts            # ✅ Discord bot with DM channels
-│   │   └── monitor.ts            # ✅ Event-driven monitoring system
-│   ├── types/
-│   │   └── index.ts              # ✅ TypeScript definitions
-│   └── index.ts                  # ✅ Main CLI entry point
-├── .ccremote/                    # ✅ Session state & logs
-│   ├── sessions.json             # ✅ Session persistence
-│   └── session-*.log             # ✅ Per-session monitoring logs
-├── package.json                  # ✅ Dependencies & scripts
-└── README.md                     # ✅ Updated documentation
-```
-
-### **Tech Stack:**
-
-- **✅ TypeScript**: Type-safe development with strict mode
-- **✅ Gunshi**: CLI framework for elegant command handling  
-- **✅ Bun**: Fast development and package management
-- **✅ Discord.js v14**: Modern Discord bot integration
-- **✅ dotenv**: Environment variable management
-- **✅ @clack/prompts**: Interactive CLI prompts
-- **✅ consola**: Elegant console logging
-- **✅ ESLint + tsdown**: Code quality and compilation
+**Technical Approach:**
+- Leverages existing `tmux.capturePane()` functionality
+- Formats output with triple backticks for readability
 
 ---
 
-## 📋 **Current Status Summary**
+## Technical Considerations
 
-### **✅ Phase 1 & 2 Complete - Production Ready**
+### Smart Polling Architecture
 
-ccremote is now a fully featured CLI tool with:
+The monitoring system uses intelligent polling rather than timer-based scheduling to handle laptop sleep/wake cycles reliably:
 
-- **🚀 One-command workflow**: `ccremote init` → `ccremote start` → Claude Code running
-- **🔄 Auto-continuation**: Automatic session resumption when limits reset
-- **📱 Discord integration**: Private bot notifications with dedicated session channels
-- **⚡ Seamless UX**: Background monitoring with clean session management
-- **🔧 Easy configuration**: Interactive setup with comprehensive guidance
-- **✅ Full approval support**: Remote approvals with unlimited options (1, 2, 3+)
-- **📺 Channel management**: Dedicated Discord channels per session with intelligent reuse
+**Why Polling Over Timers:**
+- `setTimeout()` breaks on laptop sleep (timers fire late or not at all)
+- Node.js scheduling libraries have sleep/wake drift issues
+- Polling is self-correcting and sleep-robust
 
-### **📦 Ready for Distribution**
+**Dynamic Polling Intervals:**
+- 30 seconds: Normal monitoring (low CPU usage)
+- 5 seconds: When reset time approaches
+- 1 second: Final moments before reset
 
-- **Package structure**: Complete TypeScript implementation
-- **Documentation**: Updated README with current workflow
-- **Configuration**: Multi-level config system with privacy-first approach
-- **Error handling**: Graceful failures and informative messages
-- **Cross-platform**: Works on macOS, Linux (Windows with WSL/tmux)
-- **Comprehensive testing**: In-source vitest tests with real tmux fixtures
+This approach provides reliability across all platforms without external dependencies.
 
----
+### Security Model
 
-## 🎯 **Next Phase Recommendations**
+**Command Execution Security:**
+- Whitelist-only command validation
+- Per-user rate limiting
+- Session isolation (commands bound to Discord channels)
+- Comprehensive audit logging
 
-### **Priority: Phase 3 - Smart Scheduling**
-Window optimization and scheduling for power users to maximize 5-hour usage windows.
-
-### **Future: Phase 4 - Advanced Discord**
-Rich Discord embeds, interactive commands, and multi-session management.
+**Discord Integration Security:**
+- Channel-based authorization (existing pattern)
+- No sensitive data in Discord messages
+- Session state isolation
 
 ---
 
+## Future Roadmap
+
+### v0.3.0 - Smart Scheduling
+**Target: Q2 2024**
+
+- Early window scheduling (3-5am commands to optimize usage windows)
+- 5-hour window pattern optimization (5am→10am→3pm→8pm)
+- Sleep/wake robust scheduling system
+- Smart retry logic with exponential backoff
+
+### v0.4.0 - Enhanced Discord Integration
+**Target: Q3 2024**
+
+- Rich Discord embeds with status colors
+- Interactive session management via Discord
+- Multi-session support through single Discord bot
+- Customizable notification preferences
+
+### v0.5.0 - Session Management
+**Target: Q4 2024**
+
+- Session templates and presets
+- Advanced logging and session history
+- Session sharing and collaboration features
+- Integration with other development tools
+
+---
+
+## Implementation Notes
+
+### New Components Required
+
+1. **CommandValidator** (`src/security/command-validator.ts`)
+   - Command whitelist management
+   - Rate limiting implementation
+   - Security validation and sanitization
+
+2. **TaskCompletionDetector** (extend existing `src/core/monitor.ts`)
+   - Idle detection patterns
+   - Completion state recognition
+   - Notification debouncing
+
+3. **OutputFormatter** (`src/utils/output-formatter.ts`)
+   - Discord message formatting
+   - Message length handling
+   - Monospace code block generation
+
+### Integration Strategy
+
+- Extend existing `DiscordBot` message handling
+- Add new notification types to existing system
+- Leverage current tmux integration
+- Maintain backward compatibility
+
+This plan focuses on enhancing remote control capabilities while maintaining the robust foundation established in v0.1.0.
