@@ -59,6 +59,22 @@ View current tmux session content in Discord as text.
 - Leverages existing `tmux.capturePane()` functionality
 - Formats output with triple backticks for readability
 
+#### 4. Enhanced Session Cleanup
+**Priority: Low**
+
+Improve the cleanup process to properly archive Discord channels for ended sessions.
+
+**Implementation:**
+- Extend existing `ccremote clean` command
+- Archive Discord channels instead of leaving them orphaned
+- Rename channels with "archived-" prefix
+- Remove send permissions but preserve read access for history
+- Clean up channel-session mappings
+
+**Integration:**
+- Enhances existing cleanup in `DiscordBot.cleanupSessionChannel()`
+- Extends `ccremote clean` command functionality
+
 ---
 
 ## Technical Considerations

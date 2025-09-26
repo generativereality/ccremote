@@ -13,6 +13,7 @@ All notable changes to ccremote will be documented in this file.
 ### Enhanced
 - **Monitoring System**: Extended with idle detection and completion patterns
 - **Discord Integration**: New command handlers and output formatting capabilities
+- **Session Cleanup**: Discord channel archiving for ended sessions (extends `ccremote clean`)
 
 ## [v0.1.0] - 2024-01-XX
 
