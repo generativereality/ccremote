@@ -81,7 +81,7 @@ export class Daemon {
 			// Initialize managers
 			this.sessionManager = new SessionManager();
 			this.tmuxManager = new TmuxManager();
-			this.discordBot = new DiscordBot();
+			this.discordBot = new DiscordBot(this.sessionManager, this.tmuxManager);
 			this.monitor = new Monitor(
 				this.sessionManager,
 				this.tmuxManager,
@@ -223,6 +223,9 @@ export class Daemon {
 	 * Main daemon loop - keeps process alive and handles periodic tasks
 	 */
 	private async runLoop(): Promise<void> {
+		let heartbeatCounter = 0;
+		const HEARTBEAT_INTERVAL = 6; // Log heartbeat every 6 cycles (1 minute)
+
 		while (this.running) {
 			try {
 				// Check if session still exists
@@ -256,6 +259,13 @@ export class Daemon {
 					}
 
 					break;
+				}
+
+				// Heartbeat logging every minute
+				heartbeatCounter++;
+				if (heartbeatCounter >= HEARTBEAT_INTERVAL) {
+					this.log('INFO', `Heartbeat: Daemon active, monitoring session ${this.config.sessionId} (${session.name}), status: ${session.status}`);
+					heartbeatCounter = 0;
 				}
 
 				// Sleep for a while before next check
