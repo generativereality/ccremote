@@ -36,10 +36,14 @@ export class Monitor extends EventEmitter {
 		quotaCommandSent?: boolean;
 	}>();
 
+	// ANSI escape sequence constants for linting compliance
+	private readonly ANSI_ESCAPE = '\u001B[';
+
 	// Pattern matching for Claude Code messages
 	public readonly patterns = {
-		// Usage limit patterns - enhanced from proof-of-concept
-		usageLimit: /(?:5-hour limit reached.*resets|usage limit.*resets|rate limit.*exceeded|quota.*reached|limit.*exceeded)/i,
+		// Usage limit patterns - must contain full contextual phrases to avoid false positives
+		// Real limit messages have explanatory text, not just session summary entries
+		usageLimit: /(?:you've\s+reached\s+your.*?(?:conversation\s+)?limit|your\s+(?:conversation\s+)?limit\s+(?:will\s+)?reset|usage\s+limit\s+reached\.\s+your\s+limit\s+resets|continue\s+this\s+conversation\s+(?:later\s+)?(?:when|by)|you\s+can\s+continue\s+(?:this\s+)?conversation\s+when)/i,
 		// Continuation ready patterns
 		continuationReady: /(?:continue|resume|ready.*continue)/i,
 		// Claude Code approval dialog patterns - from working proof-of-concept
@@ -182,7 +186,7 @@ export class Monitor extends EventEmitter {
 				}
 			}
 
-			// Get current output
+			// Get current output (plain text for most analysis)
 			const currentOutput = await this.tmuxManager.capturePane(session.tmuxSession);
 			await this.analyzeOutput(sessionId, currentOutput);
 		}
@@ -231,8 +235,8 @@ export class Monitor extends EventEmitter {
 			return;
 		}
 
-		// Check for usage limit with cooldown protection
-		if (this.patterns.usageLimit.test(output) && !sessionState.awaitingContinuation) {
+		// Check for usage limit with cooldown protection and terminal state validation
+		if (this.hasLimitMessage(output) && this.isActiveTerminalState(output) && !sessionState.awaitingContinuation) {
 			// Check cooldown period to prevent continuous continuation loops (5 minutes)
 			const CONTINUATION_COOLDOWN_MS = 5 * 60 * 1000;
 			const timeSinceLastContinuation = sessionState.lastContinuationTime
@@ -258,10 +262,20 @@ export class Monitor extends EventEmitter {
 			await this.handleContinuationReady(sessionId, output);
 		}
 
-		// Check for Claude Code approval dialogs
+		// Check for Claude Code approval dialogs with color validation
 		if (this.detectApprovalDialog(output)) {
-			logger.info(`Approval dialog detected for session ${sessionId}`);
-			await this.handleApprovalRequest(sessionId, output);
+			// Validate this is a real interactive approval dialog by checking colors
+			const session = await this.sessionManager.getSession(sessionId);
+			if (session) {
+				const colorOutput = await this.tmuxManager.capturePaneWithColors(session.tmuxSession);
+				if (this.isInteractiveApprovalDialog(colorOutput)) {
+					logger.info(`Interactive approval dialog detected for session ${sessionId}`);
+					await this.handleApprovalRequest(sessionId, output);
+				}
+				else {
+					logger.debug(`Approval-like text detected but not interactive (likely pasted text), skipping`);
+				}
+			}
 		}
 	}
 
@@ -356,6 +370,70 @@ export class Monitor extends EventEmitter {
 		setTimeout(() => {
 			void this.performAutoContinuation(sessionId);
 		}, 2000); // 2 second delay
+	}
+
+	/**
+	 * Check if approval dialog is interactive (not pasted text) by looking for color codes
+	 * Real approval dialogs have color formatting, pasted text appears in grey
+	 */
+	public isInteractiveApprovalDialog(colorOutput: string): boolean {
+		// Look for ANSI color escape sequences that indicate interactive content
+		// Pasted text typically appears in grey (color 8 or 90) or dim formatting
+		// Interactive dialogs have normal/bright colors
+
+		const lines = colorOutput.split('\n');
+		let hasInteractiveColors = false;
+		let hasApprovalContent = false;
+
+		for (const line of lines) {
+			// Check if line contains approval-related content
+			if (line.includes('Do you want to') || line.includes('❯') || /\d+\.\s+Yes/.test(line)) {
+				hasApprovalContent = true;
+
+				// Look for color codes that indicate interactive content
+				// ESC[0m = reset, ESC[1m = bold, ESC[36m = cyan, etc.
+				// Avoid grey/dim colors: ESC[2m (dim), ESC[90m (grey), ESC[8m (invisible)
+				const hasNormalColors = line.includes(this.ANSI_ESCAPE) && /\[(?:[013-79]|[13][0-79]|4[0-79]|9[1-79])m/.test(line);
+				const isGreyOrDim = line.includes(this.ANSI_ESCAPE) && /\[(?:2|8|90)m/.test(line);
+
+				if (hasNormalColors && !isGreyOrDim) {
+					hasInteractiveColors = true;
+				}
+			}
+		}
+
+		// If we have approval content but no color info at all, assume it's interactive
+		// (some terminals might not show colors)
+		if (hasApprovalContent && !colorOutput.includes(this.ANSI_ESCAPE)) {
+			return true;
+		}
+
+		return hasApprovalContent && hasInteractiveColors;
+	}
+
+	/**
+	 * Check if output contains a limit message (simplified pattern)
+	 */
+	public hasLimitMessage(output: string): boolean {
+		return /limit\s+reached|usage\s+limit|limit.*resets/i.test(output);
+	}
+
+	/**
+	 * Check if terminal is in an active state (has input prompt, not just displaying a list)
+	 * Active states include command prompts, input boxes, or continuation messages
+	 */
+	public isActiveTerminalState(output: string): boolean {
+		// Look for command prompt patterns or input indicators
+		const activeStatePatterns = [
+			/^>\s*$/m, // Command prompt line
+			/^[^>\n]*>\s*$/m, // Prompt with text before >
+			/─+\s*>\s*─+/, // Input box with > prompt (simplified)
+			/continue\s+this\s+conversation/i, // Continuation instruction
+			/you\s+can\s+continue/i, // Alternative continuation text
+			/your\s+limit\s+(?:will\s+)?reset/i, // Reset information
+		];
+
+		return activeStatePatterns.some(pattern => pattern.test(output));
 	}
 
 	/**
@@ -1050,6 +1128,89 @@ More text here`;
 				expect(result.options[0]).toEqual({ number: 1, text: 'Yes' });
 				expect(result.options[1]).toEqual({ number: 2, text: 'Yes, allow all edits during this session', shortcut: 'shift+tab' });
 				expect(result.options[2]).toEqual({ number: 3, text: 'No, and tell Claude what to do differently', shortcut: 'esc' });
+			});
+		});
+
+		// Test for sessions list view not triggering limit detection
+		describe('Usage Limit Detection Specificity', () => {
+			const sessionsListFixture = `          Modified     Created        Msgs Git Branch                                 Summary
+❯ 1.  5s ago       14h ago         105 dev                                        Tmux Approval Detection and Daemon Heartbeat Logging
+  2.  3d ago       3d ago            2 dev                                        Scheduled Quota Window Message Timing Verification
+  3.  3d ago       3d ago          298 dev                                        This session is being continued from a previo…
+  4.  3d ago       3d ago            2 dev                                        🕕 This message will be sent at 9/24/2025, 5:…
+  5.  3d ago       3d ago          175 dev                                        fix linting issues from bun run release:test
+  6.  3d ago       3d ago          254 dev                                        it seems that bun link wont make npm deps ava…
+  7.  3d ago       3d ago           66 dev                                        ccremote list    -- this command should also…
+  8.  3d ago       4d ago          382 dev                                        lets make project metadata, readme and websit…
+  9.  3d ago       3d ago            2 dev                                        Good morning!
+  10. 4d ago       4d ago           50 dev                                        need to add an acknowledgement section near e…
+  11. 4d ago       4d ago           56 dev                                        sometimes it gets stuck forever on:   $ ccrem…
+  12. 4d ago       4d ago           24 dev                                        deploy the website
+  13. 4d ago       6d ago          389 main                                       Bumpp Version Release Strategy for First Official Version
+  14. 2w ago       2w ago          105 dev                                        install the current dev version of ccremote g…
+  15. 2w ago       2w ago           69 dev                                        Debugging Session Management and Termination Processes
+  16. 2w ago       2w ago            2 dev                                        hello
+  17. 2w ago       2w ago          289 dev                                        This session is being continued from a previo…
+  18. 2w ago       2w ago          393 dev                                        Debugging Python Web Scraper with Selenium and BeautifulSoup
+  19. 2w ago       2w ago           25 dev                                        Docs Deployment: Streamlined Wrangler Production Setup
+  21. 2w ago       2w ago           84 dev                                        Discord Approval Workflow Daemon Implementation
+  22. 2w ago       2w ago           94 dev                                        Refactoring Reset Time Parsing in Limit Handling
+  23. 2w ago       2w ago          246 dev                                        lets add the website. look into the ccusage r…
+  24. 2w ago       2w ago          382 dev                                        Debugging Python Web Scraper with Selenium and BeautifulSoup
+  25. 2w ago       2w ago           10 dev                                        after some while of using tmux with mouse mod…
+  26. 2w ago       2w ago           61 dev                                        we have an issue with the sessions.json appro…
+  27. 2w ago       2w ago           22 dev                                        it seems stock tmux in mac is tmux 3.3a, and…
+  28. 2w ago       2w ago            4 dev                                        5-hour limit reached ∙ resets 1am
+  29. 2w ago       2w ago            2 dev                                        5-hour limit reached ∙ resets 1am
+  30. 2w ago       2w ago          164 dev                                        5-hour limit reached ∙ resets 1am
+  31. 2w ago       2w ago           23 dev                                        bun run check
+  32. 2w ago       2w ago          129 dev                                        CCRemote CLI: Session Flag Implementation Complete
+  33. 2w ago       2w ago           56 dev                                        Claude Writes Comprehensive Project Documentation Guide
+  34. 2w ago       2w ago          133 dev                                        Tmux Logging Fix: Redirecting Daemon Output Cleanly
+↓ 35. 2w ago       2w ago           30 dev                                        Debugging Gunshi Command Argument Parsing Issue`;
+
+			const realLimitMessageFixture = `5-hour limit reached ∙ resets 3:45pm
+
+You've reached your 5-hour conversation limit. Your limit will reset at 3:45pm.
+
+Continue this conversation later by running:
+ccremote start --session-id ccremote-1
+
+──────────────────────────────────────────────────────────────────────
+>
+──────────────────────────────────────────────────────────────────────`;
+
+			const anotherRealLimitFixture = `Usage limit reached. Your limit resets at 10:30am.
+
+You can continue this conversation when your usage limit resets.
+
+──────────────────────────────────────────────────────────────────────
+>
+──────────────────────────────────────────────────────────────────────`;
+
+			it('should NOT detect limit in sessions list view', () => {
+				const hasLimit = monitor.hasLimitMessage(sessionsListFixture);
+				const isActive = monitor.isActiveTerminalState(sessionsListFixture);
+				expect(hasLimit && isActive).toBe(false);
+			});
+
+			it('should detect real limit messages with active terminal state', () => {
+				const hasLimit = monitor.hasLimitMessage(realLimitMessageFixture);
+				const isActive = monitor.isActiveTerminalState(realLimitMessageFixture);
+				expect(hasLimit && isActive).toBe(true);
+			});
+
+			it('should detect another real limit message format with active terminal state', () => {
+				const hasLimit = monitor.hasLimitMessage(anotherRealLimitFixture);
+				const isActive = monitor.isActiveTerminalState(anotherRealLimitFixture);
+				expect(hasLimit && isActive).toBe(true);
+			});
+
+			it('should detect limit message in sessions list but recognize inactive state', () => {
+				const hasLimit = monitor.hasLimitMessage(sessionsListFixture);
+				const isActive = monitor.isActiveTerminalState(sessionsListFixture);
+				expect(hasLimit).toBe(true); // Contains limit text
+				expect(isActive).toBe(false); // But not active terminal state
 			});
 		});
 	});
