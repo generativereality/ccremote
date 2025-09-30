@@ -2,18 +2,22 @@
 
 All notable changes to ccremote will be documented in this file.
 
-## [v0.2.0] - Planned
+## [v0.2.0] - 2024-09-30
 
 ### Added
-- **Discord Command System**: Send commands directly to Claude Code sessions from Discord (`/send <command>`)
-- **Task Completion Detection**: Get notifications when Claude finishes tasks and stops processing
-- **Tmux Output Display**: View current session content in Discord as formatted text ("screenshots")
-- **Security Framework**: Command validation, rate limiting, and audit logging for remote commands
+- **Task Completion Detection**: Get notifications when Claude finishes tasks and is ready for new input (10-second idle detection with 5-minute cooldown)
+- **Discord Output Command**: View current session output in Discord with `/output` command (last 50 lines, formatted in code blocks, smart chunking for long output)
+- **Orphaned Channel Cleanup**: Automatic cleanup of Discord channels that exist but aren't connected to any active session
 
 ### Enhanced
-- **Monitoring System**: Extended with idle detection and completion patterns
-- **Discord Integration**: New command handlers and output formatting capabilities
-- **Session Cleanup**: Discord channel archiving for ended sessions (extends `ccremote clean`)
+- **Monitoring System**: Extended with idle detection patterns and task completion notification logic
+- **Discord Integration**: New `/output` command handler with smart formatting and message chunking capabilities
+- **Session Cleanup**: Enhanced `ccremote clean` command now also finds and archives orphaned Discord channels
+- **Pattern Detection**: Improved regex patterns for detecting when Claude is waiting for input vs actively processing
+
+### Technical Improvements
+- **Error Handling**: Improved error handling for Discord bot failures and graceful degradation when Discord is unavailable
+- **Code Quality**: Enhanced type safety and pattern matching for monitoring system
 
 ## [v0.1.0] - 2024-01-XX
 
