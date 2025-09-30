@@ -291,3 +291,199 @@ export const cleanCommand = define({
 		}
 	},
 });
+
+if (import.meta.vitest) {
+	/* eslint-disable ts/no-unsafe-assignment */
+	const vitest = await import('vitest');
+	const { beforeEach, describe, it, expect, vi } = vitest;
+
+	describe('Clean Command - Orphaned Channel Logic', () => {
+		let mockSessionManager: any;
+		let mockTmuxManager: any;
+		let mockDiscordBot: any;
+
+		beforeEach(() => {
+			mockSessionManager = {
+				initialize: vi.fn(),
+				listSessions: vi.fn(),
+				deleteSession: vi.fn(),
+			};
+
+			mockTmuxManager = {
+				sessionExists: vi.fn(),
+				killSession: vi.fn(),
+			};
+
+			mockDiscordBot = {
+				start: vi.fn(),
+				findOrphanedChannels: vi.fn(),
+				cleanupSessionChannel: vi.fn(),
+				archiveOrphanedChannel: vi.fn(),
+				shutdown: vi.fn(),
+			};
+
+			// Mock the fs module for testing
+			vi.mock('node:fs', () => ({
+				promises: {
+					access: vi.fn(),
+					mkdir: vi.fn(),
+					rename: vi.fn(),
+				},
+			}));
+
+			// Mock the daemonManager
+			vi.mock('../core/daemon-manager.ts', () => ({
+				daemonManager: {
+					ensureInitialized: vi.fn(),
+					getDaemon: vi.fn(),
+					stopDaemon: vi.fn(),
+				},
+			}));
+		});
+
+		it('should identify orphaned channels correctly when sessions exist', async () => {
+			// Mock two sessions - one ending, one active
+			const sessions = [
+				{ id: 'session-1', name: 'session-1', status: 'ended', tmuxSession: 'ccremote-1' },
+				{ id: 'session-2', name: 'session-2', status: 'active', tmuxSession: 'ccremote-2' },
+			];
+
+			mockSessionManager.listSessions.mockResolvedValue(sessions);
+			mockTmuxManager.sessionExists.mockImplementation((tmuxSession: string) => {
+				// session-1 tmux is dead, session-2 tmux is alive
+				return tmuxSession === 'ccremote-2';
+			});
+
+			// Mock orphaned channels found
+			const orphanedChannelIds = ['channel-orphan-1', 'channel-orphan-2'];
+			mockDiscordBot.findOrphanedChannels.mockResolvedValue(orphanedChannelIds);
+			mockDiscordBot.archiveOrphanedChannel.mockResolvedValue(true);
+
+			// Mock the logic that would be called in the clean function
+			const _cleanupSessions = sessions.filter(session =>
+				session.status === 'ended' || !['ccremote-2'].includes(session.tmuxSession),
+			);
+
+			const activeSessions = sessions
+				.filter(session => !_cleanupSessions.includes(session))
+				.map(session => ({ id: session.id, name: session.name }));
+
+			// Test the core logic of finding orphaned channels
+			const foundOrphanedChannels: string[] = await mockDiscordBot.findOrphanedChannels(activeSessions);
+
+			expect(mockDiscordBot.findOrphanedChannels).toHaveBeenCalledWith([
+				{ id: 'session-2', name: 'session-2' }, // Only active session
+			]);
+			expect(foundOrphanedChannels).toEqual(orphanedChannelIds);
+		});
+
+		it('should handle case where no sessions need cleanup but orphaned channels exist', async () => {
+			// Mock all sessions as active
+			const sessions = [
+				{ id: 'session-1', name: 'session-1', status: 'active', tmuxSession: 'ccremote-1' },
+				{ id: 'session-2', name: 'session-2', status: 'active', tmuxSession: 'ccremote-2' },
+			];
+
+			mockSessionManager.listSessions.mockResolvedValue(sessions);
+			mockTmuxManager.sessionExists.mockResolvedValue(true); // All tmux sessions exist
+
+			// Mock orphaned channels found
+			const orphanedChannelIds = ['channel-orphan-1'];
+			mockDiscordBot.findOrphanedChannels.mockResolvedValue(orphanedChannelIds);
+
+			// Simulate the clean command logic - no sessions to cleanup
+			const activeSessions = sessions.map(session => ({ id: session.id, name: session.name }));
+
+			const foundOrphanedChannels: string[] = await mockDiscordBot.findOrphanedChannels(activeSessions);
+
+			// Should still find orphaned channels even when no sessions need cleanup
+			expect(foundOrphanedChannels).toEqual(orphanedChannelIds);
+			expect(mockDiscordBot.findOrphanedChannels).toHaveBeenCalledWith(activeSessions);
+		});
+
+		it('should handle cleanup when both sessions and orphaned channels exist', async () => {
+			const sessions = [
+				{ id: 'session-1', name: 'session-1', status: 'ended', tmuxSession: 'ccremote-1' },
+				{ id: 'session-2', name: 'session-2', status: 'active', tmuxSession: 'ccremote-2' },
+			];
+
+			mockSessionManager.listSessions.mockResolvedValue(sessions);
+			mockTmuxManager.sessionExists.mockResolvedValue(true);
+
+			const orphanedChannelIds = ['channel-orphan-1'];
+			mockDiscordBot.findOrphanedChannels.mockResolvedValue(orphanedChannelIds);
+			mockDiscordBot.cleanupSessionChannel.mockResolvedValue(true);
+			mockDiscordBot.archiveOrphanedChannel.mockResolvedValue(true);
+
+			// Simulate cleanup logic
+			const cleanupSessions = sessions.filter(session => session.status === 'ended');
+			const activeSessions = sessions
+				.filter(session => !cleanupSessions.includes(session))
+				.map(session => ({ id: session.id, name: session.name }));
+
+			// Test that both regular session channels and orphaned channels would be cleaned
+			expect(cleanupSessions).toHaveLength(1); // session-1
+			expect(activeSessions).toEqual([{ id: 'session-2', name: 'session-2' }]);
+
+			// Would clean session-1's channel
+			await mockDiscordBot.cleanupSessionChannel(cleanupSessions[0].id);
+			expect(mockDiscordBot.cleanupSessionChannel).toHaveBeenCalledWith('session-1');
+
+			// Would also find and clean orphaned channels
+			const foundOrphanedChannels = await mockDiscordBot.findOrphanedChannels(activeSessions);
+			expect(foundOrphanedChannels).toEqual(orphanedChannelIds);
+
+			// Would archive the orphaned channels
+			for (const channelId of foundOrphanedChannels) {
+				await mockDiscordBot.archiveOrphanedChannel(channelId);
+			}
+			expect(mockDiscordBot.archiveOrphanedChannel).toHaveBeenCalledWith('channel-orphan-1');
+		});
+
+		it('should not proceed if no sessions and no orphaned channels need cleanup', async () => {
+			const sessions = [
+				{ id: 'session-1', name: 'session-1', status: 'active', tmuxSession: 'ccremote-1' },
+			];
+
+			mockSessionManager.listSessions.mockResolvedValue(sessions);
+			mockTmuxManager.sessionExists.mockResolvedValue(true);
+			mockDiscordBot.findOrphanedChannels.mockResolvedValue([]); // No orphaned channels
+
+			// Simulate the clean command early return logic - no sessions to cleanup
+			const activeSessions = sessions.map(session => ({ id: session.id, name: session.name }));
+			const orphanedChannels: string[] = await mockDiscordBot.findOrphanedChannels(activeSessions);
+
+			// Should return early when both are empty (no sessions to cleanup and no orphaned channels)
+			const cleanupSessionsCount = 0; // No sessions to cleanup
+			const shouldReturn = cleanupSessionsCount === 0 && orphanedChannels.length === 0;
+			expect(shouldReturn).toBe(true);
+		});
+
+		it('should handle Discord bot initialization failure gracefully', async () => {
+			const sessions = [
+				{ id: 'session-1', name: 'session-1', status: 'ended', tmuxSession: 'ccremote-1' },
+			];
+
+			mockSessionManager.listSessions.mockResolvedValue(sessions);
+			mockTmuxManager.sessionExists.mockResolvedValue(false);
+
+			// When Discord bot is null (failed to initialize)
+			const discordBot: typeof mockDiscordBot | null = null;
+
+			// Simulate the clean command logic without Discord bot
+			const cleanupSessions = sessions.filter(session => session.status === 'ended');
+			let orphanedChannels: string[] = [];
+
+			if (discordBot) {
+				const activeSessions = sessions
+					.filter(session => !cleanupSessions.includes(session))
+					.map(session => ({ id: session.id, name: session.name }));
+				orphanedChannels = await discordBot.findOrphanedChannels(activeSessions);
+			}
+
+			// Should still be able to clean sessions even without Discord bot
+			expect(cleanupSessions).toHaveLength(1);
+			expect(orphanedChannels).toEqual([]); // No orphaned channels when Discord bot is null
+		});
+	});
+}

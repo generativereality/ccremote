@@ -1,5 +1,7 @@
 import type { Message, TextChannel } from 'discord.js';
 import type { NotificationMessage } from '../types/index.ts';
+import type { SessionManager } from './session.ts';
+import type { TmuxManager } from './tmux.ts';
 import { ChannelType, Client, Events, GatewayIntentBits, PermissionFlagsBits } from 'discord.js';
 import { safeDiscordOperation, withDiscordRetry } from '../utils/discord-error-handling.ts';
 
@@ -14,8 +16,12 @@ export class DiscordBot {
 	private token: string = '';
 	private healthCheckInterval: NodeJS.Timeout | null = null;
 	private lastHealthCheckTime = new Date();
+	private sessionManager?: SessionManager;
+	private tmuxManager?: TmuxManager;
 
-	constructor() {
+	constructor(sessionManager?: SessionManager, tmuxManager?: TmuxManager) {
+		this.sessionManager = sessionManager;
+		this.tmuxManager = tmuxManager;
 		this.client = new Client({
 			intents: [
 				GatewayIntentBits.Guilds,
@@ -160,6 +166,9 @@ export class DiscordBot {
 			}
 			else if (content === 'status') {
 				await this.handleStatus(sessionId, message);
+			}
+			else if (content === 'output' || content === '/output') {
+				await this.handleOutput(sessionId, message);
 			}
 		}
 		catch (error) {
@@ -480,6 +489,104 @@ export class DiscordBot {
 		await message.reply(`📊 Session status for ${sessionId} - implementation pending`);
 	}
 
+	private async handleOutput(sessionId: string, message: Message): Promise<void> {
+		if (!this.sessionManager || !this.tmuxManager) {
+			await message.reply('❌ Output display not available - missing dependencies');
+			return;
+		}
+
+		try {
+			// Get session information
+			const session = await this.sessionManager.getSession(sessionId);
+			if (!session) {
+				await message.reply(`❌ Session ${sessionId} not found`);
+				return;
+			}
+
+			// Capture current tmux output
+			const output = await this.tmuxManager.capturePane(session.tmuxSession);
+			if (!output || output.trim().length === 0) {
+				await message.reply('📺 Session output is empty');
+				return;
+			}
+
+			// Format output for Discord (split into chunks if needed)
+			const formattedOutput = this.formatOutputForDiscord(output);
+
+			// Send output as code blocks
+			for (const chunk of formattedOutput) {
+				await message.reply(chunk);
+			}
+		}
+		catch (error) {
+			console.error('Error fetching session output:', error);
+			await message.reply('❌ Failed to fetch session output');
+		}
+	}
+
+	/**
+	 * Format tmux output for Discord display with proper code blocks and chunking
+	 */
+	private formatOutputForDiscord(output: string): string[] {
+		const MAX_DISCORD_MESSAGE_LENGTH = 2000;
+		const CODE_BLOCK_OVERHEAD = '```\n\n```'.length;
+		const MAX_CONTENT_LENGTH = MAX_DISCORD_MESSAGE_LENGTH - CODE_BLOCK_OVERHEAD;
+
+		// Clean the output - remove excessive whitespace and control characters
+		const cleanedOutput = output
+			.replace(/\r\n/g, '\n') // Normalize line endings
+			.replace(/\r/g, '\n') // Handle remaining carriage returns
+			.replace(/\t/g, '    ') // Convert tabs to spaces for better Discord display
+			.split('\n')
+			.slice(-50) // Get last 50 lines for reasonable context
+			.join('\n')
+			.trim();
+
+		if (cleanedOutput.length === 0) {
+			return ['```\n(empty output)\n```'];
+		}
+
+		// If output fits in one message, return it
+		if (cleanedOutput.length <= MAX_CONTENT_LENGTH) {
+			return [`\`\`\`\n${cleanedOutput}\n\`\`\``];
+		}
+
+		// Split into multiple chunks
+		const chunks: string[] = [];
+		const lines = cleanedOutput.split('\n');
+		let currentChunk = '';
+
+		for (const line of lines) {
+			const lineWithNewline = `${line}\n`;
+
+			// Check if adding this line would exceed the limit
+			if (currentChunk.length + lineWithNewline.length > MAX_CONTENT_LENGTH) {
+				// Save current chunk and start a new one
+				if (currentChunk.trim().length > 0) {
+					chunks.push(`\`\`\`\n${currentChunk.trim()}\n\`\`\``);
+				}
+				currentChunk = lineWithNewline;
+			}
+			else {
+				currentChunk += lineWithNewline;
+			}
+		}
+
+		// Don't forget the last chunk
+		if (currentChunk.trim().length > 0) {
+			chunks.push(`\`\`\`\n${currentChunk.trim()}\n\`\`\``);
+		}
+
+		// Add headers to chunks if there are multiple
+		if (chunks.length > 1) {
+			return chunks.map((chunk, index) =>
+				`📺 **Session Output (${index + 1}/${chunks.length})**\n${chunk}`,
+			);
+		}
+
+		return chunks.length > 0 ? [`📺 **Session Output**\n${chunks[0]}`] : ['```\n(no output to display)\n```'];
+	}
+
 	onOptionSelected(handler: (sessionId: string, optionNumber: number) => void): void {
 		this.client.on('ccremote:option_selected', ({ sessionId, optionNumber }: any) => {
 			handler(sessionId as string, optionNumber as number);
@@ -740,4 +847,221 @@ export class DiscordBot {
 			this.isReady = false;
 		}
 	}
+}
+
+if (import.meta.vitest) {
+	/* eslint-disable ts/no-unsafe-assignment */
+	const vitest = await import('vitest');
+	const { beforeEach, describe, it, expect, vi } = vitest;
+
+	describe('DiscordBot', () => {
+		let discordBot: DiscordBot;
+		let mockSessionManager: Partial<SessionManager>;
+		let mockTmuxManager: Partial<TmuxManager>;
+		let mockMessage: Partial<Message>;
+
+		beforeEach(() => {
+			mockSessionManager = {
+				getSession: vi.fn(),
+			};
+			mockTmuxManager = {
+				capturePane: vi.fn(),
+			};
+			mockMessage = {
+				reply: vi.fn(),
+				author: { id: 'test-user' } as any,
+				channel: { id: 'test-channel' } as any,
+			} as any;
+
+			discordBot = new DiscordBot(mockSessionManager as SessionManager, mockTmuxManager as TmuxManager);
+
+			// Mock internal state for testing
+			(discordBot as any).sessionManager = mockSessionManager;
+			(discordBot as any).tmuxManager = mockTmuxManager;
+			(discordBot as any).channelSessionMap.set('test-channel', 'test-session');
+			(discordBot as any).authorizedUsers = ['test-user'];
+		});
+
+		describe('formatOutputForDiscord', () => {
+			it('should handle empty output', () => {
+				const result: string[] = (discordBot as any).formatOutputForDiscord('');
+				expect(result).toEqual(['```\n(empty output)\n```']);
+			});
+
+			it('should handle short output within message limit', () => {
+				const shortOutput = 'Hello world\nThis is a test';
+				const result: string[] = (discordBot as any).formatOutputForDiscord(shortOutput);
+				expect(result).toHaveLength(1);
+				// Short output that fits within MAX_CONTENT_LENGTH goes through the early return path (line 551)
+				// which returns just the code block without header
+				expect(result[0]).toBe('```\nHello world\nThis is a test\n```');
+			});
+
+			it('should clean and normalize output correctly', () => {
+				const messyOutput = 'Line 1\r\nLine 2\rLine 3\tTabbed content';
+				const result: string[] = (discordBot as any).formatOutputForDiscord(messyOutput);
+				expect(result[0]).toContain('Line 1\nLine 2\nLine 3    Tabbed content');
+			});
+
+			it('should limit to last 50 lines for long output', () => {
+				const longOutput = Array.from({ length: 100 }, (_, i) => `Line ${i + 1}`).join('\n');
+				const result: string[] = (discordBot as any).formatOutputForDiscord(longOutput);
+				const content: string = result[0];
+				// .slice(-50) gets the last 50 lines, so from line 51 to 100
+				expect(content).toContain('Line 51'); // Should start from line 51
+				expect(content).toContain('Line 100'); // Should end at line 100
+				expect(content).not.toContain('Line 50'); // Should not contain line 50 or earlier
+			});
+
+			it('should split long output into multiple chunks', () => {
+				// Create output that will exceed Discord message limit
+				const longLine = 'A'.repeat(1900); // Close to Discord limit
+				const longOutput = `${longLine}\n${longLine}\n${longLine}`;
+				const result: string[] = (discordBot as any).formatOutputForDiscord(longOutput);
+
+				expect(result.length).toBeGreaterThan(1);
+				expect(result[0]).toContain('📺 **Session Output (1/');
+				expect(result[1]).toContain('📺 **Session Output (2/');
+			});
+
+			it('should properly wrap chunks in code blocks', () => {
+				const output = 'Some test output';
+				const result: string[] = (discordBot as any).formatOutputForDiscord(output);
+				expect(result[0]).toMatch(/```\n[\s\S]*\n```/);
+			});
+		});
+
+		describe('handleOutput', () => {
+			it('should reply with error when dependencies are missing', async () => {
+				const botWithoutDeps = new DiscordBot();
+				await (botWithoutDeps as any).handleOutput('test-session', mockMessage);
+				expect(mockMessage.reply).toHaveBeenCalledWith('❌ Output display not available - missing dependencies');
+			});
+
+			it('should reply with error when session not found', async () => {
+				mockSessionManager.getSession = vi.fn().mockResolvedValue(null);
+				await (discordBot as any).handleOutput('test-session', mockMessage);
+				expect(mockMessage.reply).toHaveBeenCalledWith('❌ Session test-session not found');
+			});
+
+			it('should reply when output is empty', async () => {
+				const session = { id: 'test-session', tmuxSession: 'test-tmux' };
+				mockSessionManager.getSession = vi.fn().mockResolvedValue(session);
+				mockTmuxManager.capturePane = vi.fn().mockResolvedValue('');
+
+				await (discordBot as any).handleOutput('test-session', mockMessage);
+				expect(mockMessage.reply).toHaveBeenCalledWith('📺 Session output is empty');
+			});
+
+			it('should send formatted output when successful', async () => {
+				const session = { id: 'test-session', tmuxSession: 'test-tmux' };
+				const tmuxOutput = 'Test output\nAnother line';
+				mockSessionManager.getSession = vi.fn().mockResolvedValue(session);
+				mockTmuxManager.capturePane = vi.fn().mockResolvedValue(tmuxOutput);
+
+				await (discordBot as any).handleOutput('test-session', mockMessage);
+
+				// Short output gets formatted as simple code block without header
+				expect(mockMessage.reply).toHaveBeenCalledWith(
+					'```\nTest output\nAnother line\n```',
+				);
+			});
+
+			it('should send multiple chunks for long output', async () => {
+				const session = { id: 'test-session', tmuxSession: 'test-tmux' };
+				const longOutput = `${'A'.repeat(1900)}\n${'B'.repeat(1900)}\n${'C'.repeat(1900)}`;
+				mockSessionManager.getSession = vi.fn().mockResolvedValue(session);
+				mockTmuxManager.capturePane = vi.fn().mockResolvedValue(longOutput);
+
+				await (discordBot as any).handleOutput('test-session', mockMessage);
+
+				// Should be called multiple times for multiple chunks
+				expect((mockMessage.reply as any).mock.calls.length).toBeGreaterThan(1);
+
+				// Each call should contain chunk indicators
+				const calls = (mockMessage.reply as any).mock.calls;
+				expect(calls[0][0]).toContain('(1/');
+				expect(calls[1][0]).toContain('(2/');
+			});
+
+			it('should handle errors gracefully', async () => {
+				const session = { id: 'test-session', tmuxSession: 'test-tmux' };
+				mockSessionManager.getSession = vi.fn().mockResolvedValue(session);
+				mockTmuxManager.capturePane = vi.fn().mockRejectedValue(new Error('Tmux error'));
+
+				await (discordBot as any).handleOutput('test-session', mockMessage);
+				expect(mockMessage.reply).toHaveBeenCalledWith('❌ Failed to fetch session output');
+			});
+		});
+
+		describe('findOrphanedChannels', () => {
+			it('should return empty array when no guilds', async () => {
+				// Mock client with empty guilds cache
+				(discordBot as any).client = { guilds: { cache: { size: 0 } } };
+				const result = await discordBot.findOrphanedChannels([]);
+				expect(result).toEqual([]);
+			});
+
+			it('should identify orphaned channels correctly', async () => {
+				const mockChannel1 = {
+					id: 'channel-1',
+					name: 'ccremote-session-1',
+					type: 0, // GuildText
+				};
+				const mockChannel2 = {
+					id: 'channel-2',
+					name: 'ccremote-session-2',
+					type: 0, // GuildText
+				};
+
+				// Create a mock cache with a filter method
+				const mockChannelCache = new Map([
+					['channel-1', mockChannel1],
+					['channel-2', mockChannel2],
+				]);
+				(mockChannelCache as any).filter = vi.fn().mockReturnValue(mockChannelCache);
+
+				const mockGuild = {
+					channels: {
+						cache: mockChannelCache,
+					},
+				};
+
+				// Mock client
+				(discordBot as any).client = {
+					guilds: {
+						cache: {
+							size: 1,
+							first: () => mockGuild,
+						},
+					},
+				};
+
+				// Test with only session-1 active
+				const activeSessions = [{ id: 'ccremote-1', name: 'session-1' }];
+				const result = await discordBot.findOrphanedChannels(activeSessions);
+
+				// channel-1 should not be orphaned (active session-1), channel-2 should be orphaned
+				expect(result).toContain('channel-2');
+				expect(result).not.toContain('channel-1');
+			});
+
+			it('should handle errors gracefully', async () => {
+				// Mock client that throws error
+				(discordBot as any).client = {
+					guilds: {
+						cache: {
+							size: 1,
+							first: () => {
+								throw new Error('Guild error');
+							},
+						},
+					},
+				};
+
+				const result = await discordBot.findOrphanedChannels([]);
+				expect(result).toEqual([]);
+			});
+		});
+	});
 }
