@@ -13,7 +13,7 @@ export type MonitoringOptions = {
 };
 
 export type MonitorEvent = {
-	type: 'limit_detected' | 'continuation_ready' | 'approval_needed' | 'error';
+	type: 'limit_detected' | 'continuation_ready' | 'approval_needed' | 'error' | 'task_completed';
 	sessionId: string;
 	data?: any;
 	timestamp: Date;
@@ -34,6 +34,8 @@ export class Monitor extends EventEmitter {
 		scheduledResetTime?: Date;
 		immediateContinueAttempted?: boolean;
 		quotaCommandSent?: boolean;
+		lastOutputChangeTime?: Date;
+		lastTaskCompletionNotification?: Date;
 	}>();
 
 	// ANSI escape sequence constants for linting compliance
@@ -55,6 +57,15 @@ export class Monitor extends EventEmitter {
 		},
 		// Reset time parsing patterns
 		resetTime: /(\d{1,2}(?::\d{2})?(?:am|pm))/i,
+		// Task completion patterns - detect when Claude is waiting for input
+		taskCompletion: {
+			// Claude is ready for new input (command prompt visible)
+			waitingForInput: /^>\s*$/m,
+			// Claude finished processing and showing results
+			taskFinished: /(?:completed|finished|done|ready)/i,
+			// No active processing indicators
+			notProcessing: /^(?!.*(?:processing|analyzing|running|executing|working)).*$/im,
+		},
 	};
 
 	constructor(
@@ -109,6 +120,8 @@ export class Monitor extends EventEmitter {
 			scheduledResetTime: undefined,
 			immediateContinueAttempted: false,
 			quotaCommandSent: false,
+			lastOutputChangeTime: new Date(),
+			lastTaskCompletionNotification: undefined,
 		});
 
 		// Start polling
@@ -202,17 +215,23 @@ export class Monitor extends EventEmitter {
 			return;
 		}
 
-		// Skip if output hasn't changed
-		if (output === sessionState.lastOutput) {
-			return;
+		// Check if output has changed
+		const outputChanged = output !== sessionState.lastOutput;
+
+		if (outputChanged) {
+			// Update output change timestamp
+			sessionState.lastOutputChangeTime = new Date();
+
+			// Get only new output since last check
+			const newOutput = this.getNewOutput(sessionState.lastOutput, output);
+			sessionState.lastOutput = output;
+
+			// Analyze new output for patterns
+			await this.detectPatterns(sessionId, newOutput);
 		}
 
-		// Get only new output since last check
-		const newOutput = this.getNewOutput(sessionState.lastOutput, output);
-		sessionState.lastOutput = output;
-
-		// Analyze new output for patterns
-		await this.detectPatterns(sessionId, newOutput);
+		// Check for task completion (idle detection) even when output hasn't changed
+		await this.checkTaskCompletion(sessionId, output);
 	}
 
 	public getNewOutput(lastOutput: string, currentOutput: string): string {
@@ -277,6 +296,97 @@ export class Monitor extends EventEmitter {
 				}
 			}
 		}
+	}
+
+	/**
+	 * Check for task completion based on idle detection and completion patterns
+	 */
+	private async checkTaskCompletion(sessionId: string, output: string): Promise<void> {
+		const sessionState = this.sessionStates.get(sessionId);
+		if (!sessionState) {
+			return;
+		}
+
+		// Skip if we're in a limit state or waiting for approval
+		if (sessionState.awaitingContinuation) {
+			return;
+		}
+
+		// Check how long since last output change
+		const lastChangeTime = sessionState.lastOutputChangeTime;
+		if (!lastChangeTime) {
+			return;
+		}
+
+		const now = new Date();
+		const idleDuration = (now.getTime() - lastChangeTime.getTime()) / 1000; // seconds
+
+		// Only consider idle if:
+		// 1. No output change for at least 10 seconds
+		// 2. Current output shows Claude is waiting for input
+		// 3. Haven't sent a completion notification recently (5 minutes cooldown)
+		const MIN_IDLE_SECONDS = 10;
+		const COMPLETION_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
+
+		if (idleDuration < MIN_IDLE_SECONDS) {
+			return;
+		}
+
+		// Check if output indicates Claude is waiting for input
+		const isWaitingForInput = this.patterns.taskCompletion.waitingForInput.test(output);
+		const notProcessing = this.patterns.taskCompletion.notProcessing.test(output);
+
+		if (!isWaitingForInput || !notProcessing) {
+			return;
+		}
+
+		// Check cooldown period to prevent spam
+		const lastNotification = sessionState.lastTaskCompletionNotification;
+		if (lastNotification) {
+			const timeSinceLastNotification = now.getTime() - lastNotification.getTime();
+			if (timeSinceLastNotification < COMPLETION_COOLDOWN_MS) {
+				return;
+			}
+		}
+
+		// Send task completion notification
+		await this.handleTaskCompletion(sessionId, output, idleDuration);
+	}
+
+	private async handleTaskCompletion(sessionId: string, output: string, idleDurationSeconds: number): Promise<void> {
+		const sessionState = this.sessionStates.get(sessionId);
+		if (!sessionState) {
+			return;
+		}
+
+		logger.info(`Task completion detected for session ${sessionId} after ${idleDurationSeconds}s idle`);
+
+		// Update state to prevent duplicate notifications
+		sessionState.lastTaskCompletionNotification = new Date();
+
+		const event: MonitorEvent = {
+			type: 'task_completed',
+			sessionId,
+			data: { output, idleDurationSeconds },
+			timestamp: new Date(),
+		};
+
+		this.emit('task_completed', event);
+
+		// Send Discord notification
+		await this.safeNotifyDiscord(sessionId, {
+			type: 'task_completed',
+			sessionId,
+			sessionName: (await this.sessionManager.getSession(sessionId))?.name || sessionId,
+			message: `✅ Task completed! Claude has been idle for ${Math.round(idleDurationSeconds)}s and is ready for new input.`,
+			metadata: {
+				idleDurationSeconds: Math.round(idleDurationSeconds),
+				lastOutputTimestamp: sessionState.lastOutputChangeTime?.toISOString(),
+				timestamp: new Date().toISOString(),
+			},
+		});
+
+		logger.info(`Task completion notification sent for session ${sessionId}`);
 	}
 
 	private async handleLimitDetected(sessionId: string, output: string): Promise<void> {

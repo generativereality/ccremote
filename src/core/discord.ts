@@ -235,6 +235,11 @@ export class DiscordBot {
 			case 'session_ended':
 				return `🏁 **${sessionName}** - Session Ended\n\n${message}`;
 
+			case 'task_completed': {
+				const idleDuration = metadata?.idleDurationSeconds || 0;
+				return `✅ **${sessionName}** - Task completed\n⏱️ Idle for: ${idleDuration}s\n\n${message}`;
+			}
+
 			default:
 				return `📝 **${sessionName}**\n\n${message}`;
 		}
