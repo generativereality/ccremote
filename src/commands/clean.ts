@@ -4,6 +4,7 @@ import { basename, join } from 'node:path';
 import { consola } from 'consola';
 import { define } from 'gunshi';
 import { daemonManager } from '../core/daemon-manager.ts';
+import { DiscordBot } from '../core/discord.ts';
 import { SessionManager } from '../core/session.ts';
 import { TmuxManager } from '../core/tmux.ts';
 
@@ -30,6 +31,28 @@ export const cleanCommand = define({
 			const sessionManager = new SessionManager();
 			const tmuxManager = new TmuxManager();
 			await sessionManager.initialize();
+
+			// Initialize Discord bot if configured
+			let discordBot: DiscordBot | null = null;
+			const botToken = process.env.CCREMOTE_DISCORD_BOT_TOKEN;
+			const ownerId = process.env.CCREMOTE_DISCORD_OWNER_ID;
+
+			if (botToken && ownerId) {
+				try {
+					discordBot = new DiscordBot(sessionManager, tmuxManager);
+					const authorizedUsersConfig = process.env.CCREMOTE_DISCORD_AUTHORIZED_USERS;
+					const authorizedUsers = authorizedUsersConfig
+						? authorizedUsersConfig.split(',').map(u => u.trim())
+						: [];
+
+					await discordBot.start(botToken, ownerId, authorizedUsers);
+					consola.info('🤖 Discord bot initialized for channel cleanup');
+				}
+				catch (error) {
+					consola.warn(`Failed to initialize Discord bot: ${error instanceof Error ? error.message : String(error)}`);
+					discordBot = null;
+				}
+			}
 
 			// Ensure daemon manager is fully initialized
 			await daemonManager.ensureInitialized();
@@ -80,22 +103,67 @@ export const cleanCommand = define({
 				}
 			}
 
-			if (cleanupSessions.length === 0) {
-				consola.success('✨ No sessions need cleaning');
+			// Check for orphaned Discord channels regardless of session cleanup
+			let orphanedChannels: string[] = [];
+			if (discordBot) {
+				const activeSessions = sessions
+					.filter(session => !cleanupSessions.includes(session))
+					.map(session => ({ id: session.id, name: session.name }));
+
+				orphanedChannels = await discordBot.findOrphanedChannels(activeSessions);
+			}
+
+			// Early return only if no sessions AND no orphaned channels
+			if (cleanupSessions.length === 0 && orphanedChannels.length === 0) {
+				consola.success('✨ No sessions or orphaned channels need cleaning');
+				if (discordBot) {
+					try {
+						await discordBot.shutdown();
+					}
+					catch {
+						// Ignore shutdown errors
+					}
+				}
 				return;
 			}
 
-			consola.info(`\n📊 Found ${cleanupSessions.length} sessions to clean:`);
-			for (const session of cleanupSessions) {
-				consola.info(`  • ${session.id} (${session.name}) - ${session.status}`);
+			// Report what will be cleaned
+			if (cleanupSessions.length > 0) {
+				consola.info(`\n📊 Found ${cleanupSessions.length} sessions to clean:`);
+				for (const session of cleanupSessions) {
+					consola.info(`  • ${session.id} (${session.name}) - ${session.status}`);
+				}
 			}
 
 			if (archiveLogs.length > 0) {
 				consola.info(`\n📁 Found ${archiveLogs.length} log files to archive`);
 			}
 
+			if (discordBot) {
+				const totalChannelsToArchive = cleanupSessions.length + orphanedChannels.length;
+
+				if (totalChannelsToArchive > 0) {
+					consola.info(`\n📺 Found ${totalChannelsToArchive} Discord channels to archive`);
+					if (cleanupSessions.length > 0) {
+						consola.info(`  • ${cleanupSessions.length} channels from ended sessions`);
+					}
+					if (orphanedChannels.length > 0) {
+						consola.info(`  • ${orphanedChannels.length} orphaned channels`);
+					}
+				}
+			}
+
 			if (dryRun) {
 				consola.info('\n🔍 Dry-run complete - no changes made');
+				if (discordBot) {
+					// Cleanup Discord bot connection for dry run
+					try {
+						await discordBot.shutdown();
+					}
+					catch {
+						// Ignore shutdown errors
+					}
+				}
 				return;
 			}
 
@@ -142,6 +210,38 @@ export const cleanCommand = define({
 				}
 			}
 
+			// Archive Discord channels for ended sessions
+			let archivedChannels = 0;
+			if (discordBot) {
+				// Archive channels for sessions being cleaned up
+				for (const session of cleanupSessions) {
+					try {
+						await discordBot.cleanupSessionChannel(session.id);
+						archivedChannels++;
+						consola.info(`📺 Archived Discord channel for session ${session.id}`);
+					}
+					catch (error: unknown) {
+						consola.warn(`Failed to archive Discord channel for ${session.id}: ${error instanceof Error ? error.message : String(error)}`);
+					}
+				}
+
+				// Archive orphaned channels that were already found
+				if (orphanedChannels.length > 0) {
+					for (const channelId of orphanedChannels) {
+						try {
+							const success = await discordBot.archiveOrphanedChannel(channelId);
+							if (success) {
+								archivedChannels++;
+								consola.info(`📺 Archived orphaned Discord channel ${channelId}`);
+							}
+						}
+						catch (error: unknown) {
+							consola.warn(`Failed to archive orphaned channel ${channelId}: ${error instanceof Error ? error.message : String(error)}`);
+						}
+					}
+				}
+			}
+
 			// Kill dead tmux sessions
 			let killedSessions = 0;
 			for (const session of cleanupSessions) {
@@ -174,6 +274,16 @@ export const cleanCommand = define({
 			consola.info(`  • Stopped ${stoppedDaemons} daemon processes`);
 			consola.info(`  • Killed ${killedSessions} tmux sessions`);
 			consola.info(`  • Archived ${archivedCount} log files`);
+			if (discordBot) {
+				consola.info(`  • Archived ${archivedChannels} Discord channels`);
+				// Cleanup Discord bot connection
+				try {
+					await discordBot.shutdown();
+				}
+				catch {
+					// Ignore shutdown errors
+				}
+			}
 		}
 		catch (error: unknown) {
 			consola.error('Failed to clean sessions:', error instanceof Error ? error.message : String(error));

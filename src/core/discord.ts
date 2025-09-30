@@ -482,6 +482,132 @@ export class DiscordBot {
 	}
 
 	/**
+	 * Find orphaned ccremote channels that exist but aren't connected to any active session
+	 */
+	async findOrphanedChannels(activeSessions: { id: string; name: string }[]): Promise<string[]> {
+		try {
+			if (!this.client.guilds.cache.size) {
+				return [];
+			}
+
+			const orphanedChannels: string[] = [];
+			const guild = this.client.guilds.cache.first();
+
+			if (!guild) {
+				return [];
+			}
+
+			// Get all channels that start with "ccremote-" but aren't "archived-"
+			const ccremoteChannels = guild.channels.cache.filter(channel =>
+				channel.name.startsWith('ccremote-')
+				&& !channel.name.startsWith('archived-')
+				&& channel.type === ChannelType.GuildText,
+			);
+
+			for (const [channelId, channel] of ccremoteChannels) {
+				// Check if this channel is mapped to any active session in our bot's memory
+				const mappedSessionId = this.channelSessionMap.get(channelId);
+
+				// Extract session name from channel name (e.g., "ccremote-ccremote-7" -> "ccremote-7")
+				const channelName = channel.name;
+				const sessionNameFromChannel = channelName.replace(/^ccremote-/, '');
+
+				// Check if this channel corresponds to any active session
+				const activeSessionIds = activeSessions.map(s => s.id);
+				const activeSessionNames = activeSessions.map(s => s.name);
+
+				// Channel is orphaned if:
+				// 1. Not mapped in bot memory AND doesn't match any active session name, OR
+				// 2. Mapped to a session that's not in active sessions
+				const isOrphaned = (!mappedSessionId && !activeSessionNames.includes(sessionNameFromChannel))
+					|| (mappedSessionId && !activeSessionIds.includes(mappedSessionId));
+
+				if (isOrphaned) {
+					orphanedChannels.push(channelId);
+					console.info(`[DISCORD] Found orphaned channel: ${channel.name} (${channelId}) - mapped to: ${mappedSessionId || 'none'}, session name from channel: ${sessionNameFromChannel}, active session names: [${activeSessionNames.join(', ')}]`);
+				}
+			}
+
+			return orphanedChannels;
+		}
+		catch (error) {
+			console.warn('[DISCORD] Error finding orphaned channels:', error);
+			return [];
+		}
+	}
+
+	/**
+	 * Archive an orphaned channel by ID
+	 */
+	async archiveOrphanedChannel(channelId: string): Promise<boolean> {
+		try {
+			const channel = await this.client.channels.fetch(channelId) as TextChannel;
+			if (!channel || channel.type !== ChannelType.GuildText) {
+				return false;
+			}
+
+			// Send a final message before archiving
+			await channel.send(`🏁 Orphaned channel detected during cleanup. This channel will be archived as it's no longer connected to an active session.`);
+
+			// Archive the channel by renaming it and removing permissions
+			const archivedName = `archived-${channel.name}`;
+			await channel.setName(archivedName);
+
+			// Remove send permissions for authorized users, but keep view permissions for history
+			for (const userId of this.authorizedUsers) {
+				try {
+					const user = await this.client.users.fetch(userId);
+					await channel.permissionOverwrites.edit(user, {
+						ViewChannel: true,
+						ReadMessageHistory: true,
+						SendMessages: false,
+					});
+				}
+				catch (error) {
+					console.warn(`Failed to update permissions for user ${userId} during orphaned cleanup:`, error);
+				}
+			}
+
+			// Clean up our internal mappings
+			this.channelSessionMap.delete(channelId);
+			// Find and remove any sessionId mappings that point to this channel
+			for (const [sessionId, mappedChannelId] of this.sessionChannelMap.entries()) {
+				if (mappedChannelId === channelId) {
+					this.sessionChannelMap.delete(sessionId);
+					break;
+				}
+			}
+
+			console.info(`[DISCORD] Archived orphaned channel: ${archivedName}`);
+			return true;
+		}
+		catch (error) {
+			console.warn(`[DISCORD] Failed to archive orphaned channel ${channelId}:`, error);
+			return false;
+		}
+	}
+
+	async shutdown(): Promise<void> {
+		try {
+			// Stop health check interval
+			if (this.healthCheckInterval) {
+				clearInterval(this.healthCheckInterval);
+				this.healthCheckInterval = null;
+			}
+
+			// Destroy Discord client connection
+			if (this.client && typeof this.client.destroy === 'function') {
+				await this.client.destroy();
+			}
+
+			this.isReady = false;
+		}
+		catch (error) {
+			console.warn('[DISCORD] Error during shutdown:', error);
+		}
+	}
+
+	/**
 	 * Start periodic health check (every hour by default)
 	 */
 	private startHealthCheck(intervalMs: number = 60 * 60 * 1000): void {
