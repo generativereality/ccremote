@@ -151,6 +151,7 @@ export const resumeCommand = define({
 				discordOwnerId: config.discordOwnerId,
 				discordAuthorizedUsers: config.discordAuthorizedUsers,
 				discordChannelId: sessionToResume.channelId,
+				discordHealthCheckInterval: config.discordHealthCheckInterval,
 				monitoringOptions: {
 					pollInterval: config.monitoringInterval,
 					maxRetries: config.maxRetries,

@@ -57,9 +57,10 @@ ccremote is a CLI tool that provides remote control for Claude Code sessions wit
 ### Key Patterns
 
 **Session Management**
-- Sessions stored in `.ccremote/sessions.json`
+- **Sessions**: Global user directory `~/.ccremote/sessions.json` (shared across all projects)
 - Auto-generated IDs: `ccremote-1`, `ccremote-2`, etc.
 - Status tracking: `active`, `waiting`, `waiting_approval`, `ended`
+- **Logs**: Global user directory `~/.ccremote/logs/` with project-specific naming: `{projectName}-{sessionId}.log`
 
 **Pattern Detection**
 - Usage limit detection: `/(?:5-hour limit reached.*resets|usage limit.*resets)/i`
@@ -70,6 +71,11 @@ ccremote is a CLI tool that provides remote control for Claude Code sessions wit
 - Notification types: `limit`, `continued`, `approval`, `error`
 - Per-user bots recommended for privacy
 - Approval workflow: detect → notify → wait for user response
+- **Resilience Features**:
+  - Automatic retry logic with exponential backoff for connection failures
+  - Increased WebSocket timeout values (handshake: 60s, hello: 2min, ready: 30s)
+  - Graceful degradation - monitoring continues even if Discord fails
+  - Smart error detection - distinguishes retryable vs permanent errors
 - **Permissions Policy**: Bot requires these Discord permissions (as implemented in src/core/discord.ts):
   - **Administrator** (recommended): Full channel management without hierarchy issues
   - OR minimal permissions:

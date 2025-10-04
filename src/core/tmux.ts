@@ -54,6 +54,18 @@ export class TmuxManager {
 		}
 	}
 
+	async capturePaneWithColors(sessionName: string): Promise<string> {
+		try {
+			// Use -e flag to include escape sequences for text/background attributes
+			const command = `tmux capture-pane -t "${sessionName}" -p -e`;
+			const { stdout } = await execAsync(command);
+			return stdout;
+		}
+		catch (error) {
+			throw new Error(`Failed to capture tmux pane with colors: ${error instanceof Error ? error.message : error}`);
+		}
+	}
+
 	async sendKeys(sessionName: string, keys: string): Promise<void> {
 		try {
 			// Send keys to tmux session
