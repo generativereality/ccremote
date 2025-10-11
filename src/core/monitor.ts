@@ -13,7 +13,7 @@ export type MonitoringOptions = {
 };
 
 export type MonitorEvent = {
-	type: 'limit_detected' | 'continuation_ready' | 'approval_needed' | 'error' | 'task_completed';
+	type: 'limit_detected' | 'approval_needed' | 'error' | 'task_completed';
 	sessionId: string;
 	data?: any;
 	timestamp: Date;
@@ -46,8 +46,6 @@ export class Monitor extends EventEmitter {
 		// Usage limit patterns - must contain full contextual phrases to avoid false positives
 		// Real limit messages have explanatory text, not just session summary entries
 		usageLimit: /(?:you've\s+reached\s+your.*?(?:conversation\s+)?limit|your\s+(?:conversation\s+)?limit\s+(?:will\s+)?reset|usage\s+limit\s+reached\.\s+your\s+limit\s+resets|continue\s+this\s+conversation\s+(?:later\s+)?(?:when|by)|you\s+can\s+continue\s+(?:this\s+)?conversation\s+when)/i,
-		// Continuation ready patterns
-		continuationReady: /(?:continue|resume|ready.*continue)/i,
 		// Claude Code approval dialog patterns - from working proof-of-concept
 		approvalDialog: {
 			// Must have all three components for valid approval dialog
@@ -275,12 +273,6 @@ export class Monitor extends EventEmitter {
 			await this.handleLimitDetected(sessionId, output);
 		}
 
-		// Check for continuation readiness (after limit was detected)
-		if (sessionState.awaitingContinuation && this.patterns.continuationReady.test(output)) {
-			logger.info(`Continuation ready detected for session ${sessionId}`);
-			await this.handleContinuationReady(sessionId, output);
-		}
-
 		// Check for Claude Code approval dialogs with color validation
 		if (this.detectApprovalDialog(output)) {
 			// Validate this is a real interactive approval dialog by checking colors
@@ -453,33 +445,6 @@ export class Monitor extends EventEmitter {
 
 		// Update session status
 		await this.sessionManager.updateSession(sessionId, { status: 'waiting' });
-	}
-
-	private async handleContinuationReady(sessionId: string, output: string): Promise<void> {
-		const sessionState = this.sessionStates.get(sessionId);
-		if (!sessionState) {
-			return;
-		}
-
-		// Reset state and set cooldown timestamp
-		sessionState.awaitingContinuation = false;
-		sessionState.retryCount = 0;
-		sessionState.lastContinuationTime = new Date();
-		sessionState.scheduledResetTime = undefined;
-
-		const event: MonitorEvent = {
-			type: 'continuation_ready',
-			sessionId,
-			data: { output },
-			timestamp: new Date(),
-		};
-
-		this.emit('continuation_ready', event);
-
-		// Auto-continue with small delay
-		setTimeout(() => {
-			void this.performAutoContinuation(sessionId);
-		}, 2000); // 2 second delay
 	}
 
 	/**
@@ -1058,12 +1023,6 @@ if (import.meta.vitest) {
 			const testOutput = '5-hour limit reached. Your limit resets at 3:45pm';
 			const patterns = (monitor as Monitor & { [key: string]: any }).patterns as { usageLimit: RegExp };
 			expect(patterns.usageLimit.test(testOutput)).toBe(true);
-		});
-
-		it('should detect continuation ready patterns', () => {
-			const testOutput = 'Ready to continue...';
-			const patterns = (monitor as Monitor & { [key: string]: any }).patterns as { continuationReady: RegExp };
-			expect(patterns.continuationReady.test(testOutput)).toBe(true);
 		});
 
 		it('should calculate new output correctly', () => {
