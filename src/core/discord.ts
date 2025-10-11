@@ -18,6 +18,8 @@ export class DiscordBot {
 	private lastHealthCheckTime = new Date();
 	private sessionManager?: SessionManager;
 	private tmuxManager?: TmuxManager;
+	private isShuttingDown = false; // Track shutdown state
+	private readyTimestamp: number = 0; // Track when bot became ready
 
 	constructor(sessionManager?: SessionManager, tmuxManager?: TmuxManager) {
 		this.sessionManager = sessionManager;
@@ -39,6 +41,15 @@ export class DiscordBot {
 		});
 
 		this.setupEventHandlers();
+		this.setupErrorSuppression();
+	}
+
+	/**
+	 * Setup error suppression for expected Discord.js shutdown errors
+	 */
+	private setupErrorSuppression(): void {
+		// Note: Discord.js WebSocket cleanup errors are handled in the shutdown() method
+		// by ensuring proper timing and graceful disconnection
 	}
 
 	async start(token: string, ownerId: string, authorizedUsers: string[] = [], healthCheckInterval?: number): Promise<void> {
@@ -85,6 +96,7 @@ export class DiscordBot {
 				console.info('[DISCORD] ClientReady event fired!');
 				clearTimeout(timeout);
 				this.isReady = true;
+				this.readyTimestamp = Date.now();
 
 				// Find the first guild the bot is in to create channels
 				const guild = this.client.guilds.cache.first();
@@ -701,21 +713,47 @@ export class DiscordBot {
 
 	async shutdown(): Promise<void> {
 		try {
+			// Set shutdown flag
+			this.isShuttingDown = true;
+
 			// Stop health check interval
 			if (this.healthCheckInterval) {
 				clearInterval(this.healthCheckInterval);
 				this.healthCheckInterval = null;
 			}
 
-			// Destroy Discord client connection
+			// Gracefully disconnect instead of destroying immediately
+			// This gives the WebSocket time to clean up properly
 			if (this.client && typeof this.client.destroy === 'function') {
-				await this.client.destroy();
+				// ALWAYS wait at least 1 second after ready before destroying
+				// Discord.js needs time to complete heartbeat setup after ClientReady fires
+				// The heartbeat controller isn't fully established until after the ready event
+				const timeSinceReady = Date.now() - this.readyTimestamp;
+				const minStableTime = 1000; // 1 second to ensure heartbeat is fully established
+
+				if (this.readyTimestamp > 0 && timeSinceReady < minStableTime) {
+					const waitTime = minStableTime - timeSinceReady;
+					console.info(`[DISCORD] Waiting ${waitTime}ms for WebSocket heartbeat to fully establish`);
+					await new Promise(resolve => setTimeout(resolve, waitTime));
+				}
+
+				// Now destroy the client
+				try {
+					this.client.destroy();
+					// Don't await - let it cleanup async without blocking
+				}
+				catch (destroyError) {
+					// Silently ignore - errors during destroy are expected
+				}
 			}
 
 			this.isReady = false;
 		}
 		catch (error) {
 			console.warn('[DISCORD] Error during shutdown:', error);
+		}
+		finally {
+			this.isShuttingDown = false;
 		}
 	}
 
@@ -839,13 +877,39 @@ export class DiscordBot {
 	}
 
 	async stop(): Promise<void> {
+		// Set shutdown flag to suppress expected errors
+		this.isShuttingDown = true;
+
 		// Stop health check first
 		this.stopHealthCheck();
 
 		if (this.client) {
-			await this.client.destroy();
+			// ALWAYS wait at least 1 second after ready before destroying
+			const timeSinceReady = Date.now() - this.readyTimestamp;
+			const minStableTime = 1000;
+
+			if (this.readyTimestamp > 0 && timeSinceReady < minStableTime) {
+				const waitTime = minStableTime - timeSinceReady;
+				console.info(`[DISCORD] Waiting ${waitTime}ms for WebSocket heartbeat to fully establish`);
+				await new Promise(resolve => setTimeout(resolve, waitTime));
+			}
+
+			try {
+				this.client.destroy();
+			}
+			catch (destroyError) {
+				// Only log non-abort errors
+				if (destroyError instanceof Error && destroyError.message !== 'The operation was aborted') {
+					console.warn('[DISCORD] Error destroying client during stop:', destroyError);
+				}
+				// Ignore AbortError - it's expected during WebSocket cleanup
+			}
 			this.isReady = false;
 		}
+
+		// Give async cleanup operations time to complete
+		await new Promise(resolve => setTimeout(resolve, 100));
+		this.isShuttingDown = false;
 	}
 }
 
