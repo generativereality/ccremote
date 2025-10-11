@@ -35,7 +35,12 @@ npm install -g ccremote
 
 # Initialize configuration interactively
 ccremote init
+
+# Keep ccremote up to date
+npm update -g ccremote
 ```
+
+> **Note**: ccremote automatically checks for updates once per day and displays a notification if a newer version is available.
 
 ### 2. Start Monitoring
 
