@@ -38,7 +38,7 @@ This will guide you through the entire process step-by-step. If you prefer manua
 2. Click "Add Bot" 
 3. Click "Yes, do it!" to confirm
 4. **Important**: Under "Privileged Gateway Intents", enable this intent:
-   - ✅ **MESSAGE CONTENT INTENT** - Required for bot to read approval commands like "approve" and "deny"
+   - ✅ **MESSAGE CONTENT INTENT** - Required for bot to read Discord commands and approval responses
 
 ### Step 3: Get Bot Token
 
@@ -96,7 +96,7 @@ Before using ccremote, test that your bot can reach you:
 ccremote bots need these specific permissions and intents to operate:
 
 ### Gateway Intents (in Bot section)
-- **MESSAGE CONTENT INTENT**: Required for bot to read approval commands like "approve" and "deny" (used in discord.ts:60)
+- **MESSAGE CONTENT INTENT**: Required for bot to read Discord commands and approval responses
 
 ### Bot Permissions (when inviting)
 - **Send Messages**: Required to send notifications and replies (used in discord.ts:111, 156, 71, 75, 83, 178)

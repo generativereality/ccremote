@@ -4,7 +4,7 @@ layout: home
 hero:
   name: ccremote
   text: Claude Code Remote
-  tagline: Remote approvals (Discord), quota-aware auto-continuation, and quota scheduling
+  tagline: Remote approvals (Discord), quota-aware auto-continuation, task completion notifications, and remote monitoring
   image:
     src: /logo.svg
     alt: ccremote logo
@@ -49,6 +49,15 @@ features:
   - icon: 💡
     title: Approval Workflow
     details: Handles Claude Code approval dialogs by notifying you via Discord when user input is needed
+  - icon: ✅
+    title: Task Completion Notifications
+    details: Get alerted when Claude finishes tasks and is ready for new input (no more checking back every few minutes)
+  - icon: 📺
+    title: Remote Output Viewing
+    details: View current session output directly in Discord with `/output` command - see what Claude is working on from anywhere
+  - icon: 🧹
+    title: Smart Cleanup
+    details: Automatic cleanup of orphaned Discord channels and session files
 ---
 
 ## How It Works

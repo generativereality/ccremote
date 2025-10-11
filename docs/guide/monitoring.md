@@ -55,6 +55,20 @@ ccremote detects various error conditions:
 - Stops monitoring if session ends permanently
 - Logs error information for troubleshooting
 
+### Task Completion Detection
+
+ccremote detects when Claude finishes tasks and is ready for new input:
+- Command prompt visible (`> ` pattern)
+- No active processing indicators (analyzing, processing, working, etc.)
+- Session idle for at least 10 seconds
+- No completion notification sent in the last 5 minutes (cooldown)
+
+**Response**:
+- Sends Discord notification that task is complete
+- Includes idle duration for context
+- Helps you know when to check back without constant monitoring
+- Respects cooldown period to avoid notification spam
+
 ### Session State Changes
 
 ccremote tracks different session states:
@@ -89,9 +103,27 @@ Please confirm your choice:
 
 ccremote detects:
 - Question: "This operation requires approval"
-- Options: "Yes, proceed" / "No, cancel" 
+- Options: "Yes, proceed" / "No, cancel"
 - Current selection: Option 1
 - Waiting for user confirmation
+
+### Task Completion Detection
+```
+File analysis complete. Found 15 issues that need attention.
+
+Summary:
+- 8 type errors fixed
+- 3 performance optimizations applied
+- 4 code style improvements made
+
+>
+```
+
+ccremote detects:
+- Task finished: "complete", "Summary"
+- Command prompt visible: `> `
+- No processing indicators present
+- Session idle for 10+ seconds
 
 ## Monitoring Configuration
 
