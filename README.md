@@ -196,7 +196,6 @@ Once your bot is set up and sessions are running, you can interact with ccremote
 - **`/output`** or **`output`** - View current session output (last 50 lines, formatted in code blocks)
 - **`status`** - Show session status information
 - **`1`, `2`, `3`** - Respond to approval dialogs with numbered options
-- **`approve`** / **`deny`** - Legacy approval commands (maps to options 1/2)
 
 **Session Channels:**
 - Each monitored session gets its own private Discord channel (e.g., `#ccremote-session-1`)

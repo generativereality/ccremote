@@ -353,7 +353,7 @@ ccremote resume --all
 
 ## `ccremote clean`
 
-Clean up old session files and orphaned tmux sessions.
+Clean up old session files, orphaned tmux sessions, and Discord channels.
 
 ```bash
 ccremote clean [options]
@@ -385,8 +385,9 @@ ccremote clean --keep-days 3
 1. Identifies ended or orphaned sessions
 2. Removes old session state files
 3. Cleans up orphaned tmux sessions
-4. Removes temporary monitoring files
-5. Frees up disk space and resources
+4. Archives orphaned Discord channels (channels without active sessions)
+5. Removes temporary monitoring files
+6. Frees up disk space and resources
 
 ---
 
@@ -459,6 +460,75 @@ See all tmux sessions (including non-ccremote):
 ```bash
 tmux list-sessions
 ```
+
+---
+
+## Discord Commands
+
+Once your Discord bot is set up and sessions are running, you can interact with ccremote through Discord:
+
+### Session Channel Commands
+
+These commands work in the dedicated Discord channel for each session:
+
+#### `/output` or `output`
+View current session output (last 50 lines, formatted in code blocks).
+
+```
+/output
+```
+
+**What it does:**
+- Captures current tmux session output
+- Shows last 50 lines for reasonable context
+- Formats output in Discord code blocks for easy reading
+- Automatically chunks long output into multiple messages
+- Works from anywhere - perfect for checking progress remotely
+
+**Example output:**
+```
+📺 **Session Output**
+```
+$ npm run build
+✓ Building for production...
+✓ Generated 15 assets
+✓ Build complete in 2.3s
+>
+```
+
+#### `status`
+Show session status information.
+
+```
+status
+```
+
+**What it does:**
+- Displays current session state
+- Shows tmux session status
+- Reports monitoring status
+- Provides basic session metadata
+
+#### Approval Responses
+Respond to approval dialogs with numbered options.
+
+```
+1    # Select option 1 (usually "Yes" or "Approve")
+2    # Select option 2 (usually "No" or "Deny")
+3    # Select option 3 (if available)
+```
+
+**What it does:**
+- Sends the selected option number to the Claude Code session
+- Continues the session with your choice
+- Provides immediate feedback in Discord
+
+### Session Channels
+
+- **Channel Creation**: Each monitored session gets its own private Discord channel (e.g., `#ccremote-session-1`)
+- **Auto-Created**: Channels are automatically created when sessions start
+- **Private**: Only you (and other authorized users) can see these channels
+- **Auto-Archived**: Channels are automatically archived when sessions end or via the `clean` command
 
 ---
 
