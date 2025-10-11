@@ -2,7 +2,7 @@
 
 All notable changes to ccremote will be documented in this file.
 
-## [v0.2.0] - 2024-09-30
+## [v0.2.0] - 2024-10-11
 
 ### Added
 - **Task Completion Detection**: Get notifications when Claude finishes tasks and is ready for new input (10-second idle detection with 5-minute cooldown)
@@ -19,7 +19,7 @@ All notable changes to ccremote will be documented in this file.
 - **Error Handling**: Improved error handling for Discord bot failures and graceful degradation when Discord is unavailable
 - **Code Quality**: Enhanced type safety and pattern matching for monitoring system
 
-## [v0.1.0] - 2024-01-XX
+## [v0.1.0] - 2025-09-24
 
 ### Added
 - **Core Monitoring System**: Automated tmux session monitoring with smart polling
