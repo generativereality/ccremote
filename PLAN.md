@@ -8,7 +8,8 @@ ccremote is a CLI tool that provides remote control for Claude Code sessions wit
 
 ---
 
-## Completed: v0.2.0 - Enhanced Monitoring & Cleanup
+## Current Release: v0.2.0 - Enhanced Monitoring & Cleanup
+**Target: October 2025**
 
 ### Implemented Features
 
@@ -122,7 +123,7 @@ Daily quota window alignment with early dummy commands.
 ## Future Roadmap
 
 ### v0.3.0 - Remote Control & Command Execution
-**Target: Q1 2025**
+**Target: Q1 2026**
 
 #### Discord-to-Claude Command System
 **Priority: High**
@@ -147,7 +148,7 @@ Send commands from Discord directly to Claude Code sessions.
 - Audit logging system for command execution
 
 ### v0.4.0 - Enhanced Discord Integration
-**Target: Q2 2025**
+**Target: Q2 2026**
 
 - Rich Discord embeds with status colors
 - Interactive session management via Discord (pause/resume/restart)
@@ -156,7 +157,7 @@ Send commands from Discord directly to Claude Code sessions.
 - Discord slash command support (instead of text commands)
 
 ### v0.5.0 - Session Management & Collaboration
-**Target: Q3 2025**
+**Target: Q3 2026**
 
 - Session templates and presets
 - Advanced logging and session history

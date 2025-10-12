@@ -2,7 +2,7 @@
 
 All notable changes to ccremote will be documented in this file.
 
-## [v0.2.0] - 2024-10-11
+## [v0.2.0] - 2025-10-12
 
 ### Added
 - **Task Completion Detection**: Get notifications when Claude finishes tasks and is ready for new input (10-second idle detection with 5-minute cooldown)
