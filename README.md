@@ -103,14 +103,15 @@ ccremote resume --session ccremote-1     # Resume a specific session
 ccremote resume --dry-run               # Preview what would be resumed
 
 # Manage sessions
-ccremote list                            # List all sessions
-ccremote list --all                      # Include ended sessions
+ccremote list                            # List sessions for current project
+ccremote list --all                      # List sessions from all projects
 ccremote status --session ccremote-1     # Show session details
 ccremote stop --session ccremote-1       # Stop session
 ccremote stop --session ccremote-1 --force  # Force stop even if active
 
 # Maintenance commands
-ccremote clean                           # Clean up old session files and orphaned Discord channels
+ccremote clean                           # Clean up current project's dead sessions
+ccremote clean --all                     # Clean up dead sessions from all projects
 ccremote clean --dry-run                 # Preview what would be cleaned
 ccremote setup-tmux                      # Configure tmux settings for ccremote
 

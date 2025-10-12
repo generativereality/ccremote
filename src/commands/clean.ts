@@ -16,12 +16,22 @@ export const cleanCommand = define({
 			type: 'boolean',
 			description: 'Show what would be cleaned without making changes',
 		},
+		'all': {
+			type: 'boolean',
+			description: 'Clean sessions from all projects (default: current project only)',
+		},
 	},
 	async run(ctx) {
-		const { 'dry-run': dryRun } = ctx.values;
+		const { 'dry-run': dryRun, 'all': cleanAll } = ctx.values;
 
 		if (dryRun) {
 			consola.info('🔍 Running in dry-run mode - no changes will be made');
+		}
+
+		if (cleanAll) {
+			consola.info('🌍 Cleaning sessions from all projects');
+		} else {
+			consola.info('📁 Cleaning sessions from current project only (use --all to clean all projects)');
 		}
 
 		consola.start('Cleaning up sessions...');
@@ -57,8 +67,10 @@ export const cleanCommand = define({
 			// Ensure daemon manager is fully initialized
 			await daemonManager.ensureInitialized();
 
-			// Get all sessions
-			const sessions = await sessionManager.listSessions();
+			// Get sessions - either all or current project only
+			const sessions = cleanAll
+				? await sessionManager.listSessions()
+				: await sessionManager.listSessionsForProject();
 			const cleanupSessions: SessionState[] = [];
 			const archiveLogs: string[] = [];
 
