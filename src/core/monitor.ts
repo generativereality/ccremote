@@ -798,6 +798,7 @@ export class Monitor extends EventEmitter {
 	private extractResetTime(output: string): string | null {
 		const timePatterns = [
 			/resets (\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i,
+			/resets at (\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i,
 			/available again at (\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i,
 			/ready at (\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i,
 		];
@@ -1330,6 +1331,14 @@ Working on something
 
 		// Test for sessions list view not triggering limit detection
 		describe('Usage Limit Detection Specificity', () => {
+			// Claude Code v2 limit message format
+			const claudeV2LimitFixture = `  Session limit reached ∙ resets 4am
+     /upgrade to increase your usage limit.
+
+──────────────────────────────────────────────────────────────────────
+>
+──────────────────────────────────────────────────────────────────────`;
+
 			const sessionsListFixture = `          Modified     Created        Msgs Git Branch                                 Summary
 ❯ 1.  5s ago       14h ago         105 dev                                        Tmux Approval Detection and Daemon Heartbeat Logging
   2.  3d ago       3d ago            2 dev                                        Scheduled Quota Window Message Timing Verification
@@ -1385,6 +1394,14 @@ You can continue this conversation when your usage limit resets.
 >
 ──────────────────────────────────────────────────────────────────────`;
 
+			it('should detect Claude Code v2 limit message format', () => {
+				const hasLimit = monitor.hasLimitMessage(claudeV2LimitFixture);
+				const isActive = monitor.isActiveTerminalState(claudeV2LimitFixture);
+				expect(hasLimit).toBe(true);
+				expect(isActive).toBe(true);
+				expect(hasLimit && isActive).toBe(true);
+			});
+
 			it('should NOT detect limit in sessions list view', () => {
 				const hasLimit = monitor.hasLimitMessage(sessionsListFixture);
 				const isActive = monitor.isActiveTerminalState(sessionsListFixture);
@@ -1408,6 +1425,20 @@ You can continue this conversation when your usage limit resets.
 				const isActive = monitor.isActiveTerminalState(sessionsListFixture);
 				expect(hasLimit).toBe(true); // Contains limit text
 				expect(isActive).toBe(false); // But not active terminal state
+			});
+
+			it('should extract time from Claude Code v2 format (e.g. "4am")', () => {
+				const extractResetTime = (monitor as any).extractResetTime.bind(monitor);
+				const resetTime = extractResetTime(claudeV2LimitFixture);
+				expect(resetTime).toBe('4am');
+			});
+
+			it('should extract time from verbose limit messages', () => {
+				const extractResetTime = (monitor as any).extractResetTime.bind(monitor);
+				const resetTime1 = extractResetTime(realLimitMessageFixture);
+				const resetTime2 = extractResetTime(anotherRealLimitFixture);
+				expect(resetTime1).toBe('3:45pm');
+				expect(resetTime2).toBe('10:30am');
 			});
 		});
 	});
