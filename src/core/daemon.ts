@@ -225,6 +225,8 @@ export class Daemon {
 	private async runLoop(): Promise<void> {
 		let heartbeatCounter = 0;
 		const HEARTBEAT_INTERVAL = 6; // Log heartbeat every 6 cycles (1 minute)
+		let tmuxCheckFailures = 0;
+		const MAX_TMUX_CHECK_FAILURES = 3; // Require 3 consecutive failures before marking as ended
 
 		while (this.running) {
 			try {
@@ -235,30 +237,40 @@ export class Daemon {
 					break;
 				}
 
-				// Check if tmux session still exists
+				// Check if tmux session still exists (with retry logic)
 				const tmuxExists = await this.tmuxManager.sessionExists(session.tmuxSession);
 				if (!tmuxExists) {
-					this.log('INFO', `Tmux session ${session.tmuxSession} ended, gracefully shutting down daemon`);
+					tmuxCheckFailures++;
+					this.log('WARN', `Tmux session ${session.tmuxSession} check failed (${tmuxCheckFailures}/${MAX_TMUX_CHECK_FAILURES})`);
 
-					// Update session status to ended
-					await this.sessionManager.updateSession(this.config.sessionId, { status: 'ended' });
+					// Only mark as ended after multiple consecutive failures
+					if (tmuxCheckFailures >= MAX_TMUX_CHECK_FAILURES) {
+						this.log('INFO', `Tmux session ${session.tmuxSession} ended after ${MAX_TMUX_CHECK_FAILURES} failed checks, gracefully shutting down daemon`);
 
-					// Notify via Discord that session has ended (if Discord is available)
-					if (this.isDiscordAvailable()) {
-						try {
-							await this.discordBot.sendNotification(this.config.sessionId, {
-								type: 'session_ended',
-								sessionId: this.config.sessionId,
-								sessionName: session.name,
-								message: `Session **${session.name}** has ended. The tmux session was closed.`,
-							});
+						// Update session status to ended
+						await this.sessionManager.updateSession(this.config.sessionId, { status: 'ended' });
+
+						// Notify via Discord that session has ended (if Discord is available)
+						if (this.isDiscordAvailable()) {
+							try {
+								await this.discordBot.sendNotification(this.config.sessionId, {
+									type: 'session_ended',
+									sessionId: this.config.sessionId,
+									sessionName: session.name,
+									message: `Session **${session.name}** has ended. The tmux session was closed.`,
+								});
+							}
+							catch (error) {
+								this.log('WARN', `Failed to send session end notification: ${error instanceof Error ? error.message : String(error)}`);
+							}
 						}
-						catch (error) {
-							this.log('WARN', `Failed to send session end notification: ${error instanceof Error ? error.message : String(error)}`);
-						}
+
+						break;
 					}
-
-					break;
+				}
+				else {
+					// Tmux session exists - reset failure counter
+					tmuxCheckFailures = 0;
 				}
 
 				// Heartbeat logging every minute
