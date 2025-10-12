@@ -774,8 +774,8 @@ export class Monitor extends EventEmitter {
 			await new Promise(resolve => setTimeout(resolve, 3000));
 			const responseOutput = await this.tmuxManager.capturePane(session.tmuxSession);
 
-			// Check if the same limit message still appears
-			const stillHasLimitMessage = this.patterns.usageLimit.test(responseOutput);
+			// Check if the same limit message still appears (use simple pattern check)
+			const stillHasLimitMessage = this.hasLimitMessage(responseOutput);
 
 			if (stillHasLimitMessage) {
 				logger.info('Immediate continuation failed - limit message still present');
@@ -1428,14 +1428,19 @@ You can continue this conversation when your usage limit resets.
 			});
 
 			it('should extract time from Claude Code v2 format (e.g. "4am")', () => {
+				// eslint-disable-next-line ts/no-unsafe-assignment
 				const extractResetTime = (monitor as any).extractResetTime.bind(monitor);
+				// eslint-disable-next-line ts/no-unsafe-assignment
 				const resetTime = extractResetTime(claudeV2LimitFixture);
 				expect(resetTime).toBe('4am');
 			});
 
 			it('should extract time from verbose limit messages', () => {
+				// eslint-disable-next-line ts/no-unsafe-assignment
 				const extractResetTime = (monitor as any).extractResetTime.bind(monitor);
+				// eslint-disable-next-line ts/no-unsafe-assignment
 				const resetTime1 = extractResetTime(realLimitMessageFixture);
+				// eslint-disable-next-line ts/no-unsafe-assignment
 				const resetTime2 = extractResetTime(anotherRealLimitFixture);
 				expect(resetTime1).toBe('3:45pm');
 				expect(resetTime2).toBe('10:30am');
