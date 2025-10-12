@@ -30,7 +30,8 @@ export const cleanCommand = define({
 
 		if (cleanAll) {
 			consola.info('🌍 Cleaning sessions from all projects');
-		} else {
+		}
+		else {
 			consola.info('📁 Cleaning sessions from current project only (use --all to clean all projects)');
 		}
 
@@ -129,12 +130,7 @@ export const cleanCommand = define({
 			if (cleanupSessions.length === 0 && orphanedChannels.length === 0) {
 				consola.success('✨ No sessions or orphaned channels need cleaning');
 				if (discordBot) {
-					try {
-						await discordBot.shutdown();
-					}
-					catch {
-						// Ignore shutdown errors
-					}
+					await discordBot.shutdown();
 				}
 				return;
 			}
@@ -168,13 +164,7 @@ export const cleanCommand = define({
 			if (dryRun) {
 				consola.info('\n🔍 Dry-run complete - no changes made');
 				if (discordBot) {
-					// Cleanup Discord bot connection for dry run
-					try {
-						await discordBot.shutdown();
-					}
-					catch {
-						// Ignore shutdown errors
-					}
+					await discordBot.shutdown();
 				}
 				return;
 			}
@@ -288,13 +278,7 @@ export const cleanCommand = define({
 			consola.info(`  • Archived ${archivedCount} log files`);
 			if (discordBot) {
 				consola.info(`  • Archived ${archivedChannels} Discord channels`);
-				// Cleanup Discord bot connection
-				try {
-					await discordBot.shutdown();
-				}
-				catch {
-					// Ignore shutdown errors
-				}
+				await discordBot.shutdown();
 			}
 		}
 		catch (error: unknown) {

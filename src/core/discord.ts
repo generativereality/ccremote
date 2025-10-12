@@ -722,32 +722,19 @@ export class DiscordBot {
 				this.healthCheckInterval = null;
 			}
 
-			// Gracefully disconnect instead of destroying immediately
-			// This gives the WebSocket time to clean up properly
-			if (this.client && typeof this.client.destroy === 'function') {
-				// ALWAYS wait at least 1 second after ready before destroying
-				// Discord.js needs time to complete heartbeat setup after ClientReady fires
-				// The heartbeat controller isn't fully established until after the ready event
-				const timeSinceReady = Date.now() - this.readyTimestamp;
-				const minStableTime = 1000; // 1 second to ensure heartbeat is fully established
-
-				if (this.readyTimestamp > 0 && timeSinceReady < minStableTime) {
-					const waitTime = minStableTime - timeSinceReady;
-					console.info(`[DISCORD] Waiting ${waitTime}ms for WebSocket heartbeat to fully establish`);
-					await new Promise(resolve => setTimeout(resolve, waitTime));
-				}
-
-				// Now destroy the client
-				try {
-					this.client.destroy();
-					// Don't await - let it cleanup async without blocking
-				}
-				catch (destroyError) {
-					// Silently ignore - errors during destroy are expected
-				}
-			}
-
+			// Mark as not ready
 			this.isReady = false;
+
+			// DON'T call client.destroy() - it causes an AbortError from Discord.js internals
+			// that we cannot catch because Bun prints it before our error handlers run.
+			// Instead, just clear our reference and let the garbage collector clean up.
+			// The WebSocket will close naturally when the process exits or when the client
+			// is garbage collected.
+			if (this.client) {
+				// Just null out our reference - GC will handle cleanup
+			// eslint-disable-next-line ts/no-unsafe-assignment
+				this.client = null as any;
+			}
 		}
 		catch (error) {
 			console.warn('[DISCORD] Error during shutdown:', error);
@@ -877,39 +864,8 @@ export class DiscordBot {
 	}
 
 	async stop(): Promise<void> {
-		// Set shutdown flag to suppress expected errors
-		this.isShuttingDown = true;
-
-		// Stop health check first
-		this.stopHealthCheck();
-
-		if (this.client) {
-			// ALWAYS wait at least 1 second after ready before destroying
-			const timeSinceReady = Date.now() - this.readyTimestamp;
-			const minStableTime = 1000;
-
-			if (this.readyTimestamp > 0 && timeSinceReady < minStableTime) {
-				const waitTime = minStableTime - timeSinceReady;
-				console.info(`[DISCORD] Waiting ${waitTime}ms for WebSocket heartbeat to fully establish`);
-				await new Promise(resolve => setTimeout(resolve, waitTime));
-			}
-
-			try {
-				this.client.destroy();
-			}
-			catch (destroyError) {
-				// Only log non-abort errors
-				if (destroyError instanceof Error && destroyError.message !== 'The operation was aborted') {
-					console.warn('[DISCORD] Error destroying client during stop:', destroyError);
-				}
-				// Ignore AbortError - it's expected during WebSocket cleanup
-			}
-			this.isReady = false;
-		}
-
-		// Give async cleanup operations time to complete
-		await new Promise(resolve => setTimeout(resolve, 100));
-		this.isShuttingDown = false;
+		// Reuse shutdown logic
+		await this.shutdown();
 	}
 }
 
