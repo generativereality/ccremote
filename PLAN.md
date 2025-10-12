@@ -4,20 +4,132 @@
 
 ccremote is a CLI tool that provides remote control for Claude Code sessions with Discord integration. It monitors Claude Code sessions via tmux, automatically continues them when usage limits reset, and provides Discord notifications for session events and approval requests.
 
-**Current Status:** v0.1.0 released with core monitoring, auto-continuation, and Discord approval system working in production.
+**Current Status:** v0.2.0 released with task completion detection, Discord output viewing, enhanced cleanup, and quota scheduling working in production.
 
 ---
 
-## Next Release: v0.2.0 - Remote Control Features
+## Completed: v0.2.0 - Enhanced Monitoring & Cleanup
 
-### Planned Features
+### Implemented Features
 
-#### 1. Discord-to-Claude Command System
+#### 1. Task Completion Detection ✅
+**Status: Released**
+
+Get notifications when Claude finishes tasks and stops processing.
+
+**Implementation:**
+- Idle detection: no output changes for 10+ seconds
+- Smart pattern matching for Claude's waiting-for-input state
+- New notification type: `task_completed`
+- 5-minute cooldown to prevent spam
+
+**Code:**
+- `src/core/monitor.ts`: Lines 293-379 (checkTaskCompletion, handleTaskCompletion)
+- Pattern detection with `waitingForInput` and `notProcessing` patterns
+- Integrated with existing monitoring loop
+
+#### 2. Tmux Output Display ("Screenshots") ✅
+**Status: Released**
+
+View current tmux session content in Discord as text.
+
+**Implementation:**
+- Discord command: `/output`
+- Monospaced formatting using Discord code blocks
+- Smart message splitting for long output (Discord 2000 char limit)
+- Last 50 lines context with cleaned output
+
+**Code:**
+- `src/core/discord.ts`: Lines 182-600
+- `handleOutput()` method with session validation
+- `formatOutputForDiscord()` with intelligent chunking
+- Complete test coverage for edge cases
+
+#### 3. Enhanced Session Cleanup ✅
+**Status: Released**
+
+Properly archive Discord channels for ended sessions and detect orphaned channels.
+
+**Implementation:**
+- Extended `ccremote clean` command
+- Archive Discord channels with "archived-" prefix
+- Remove send permissions but preserve read access for history
+- Orphaned channel detection and cleanup
+- Channel-session mapping cleanup
+
+**Code:**
+- `src/core/discord.ts`: Lines 451-712
+- `cleanupSessionChannel()` for normal cleanup
+- `findOrphanedChannels()` and `archiveOrphanedChannel()` for orphans
+- Integrated permission management
+
+#### 4. Quota Scheduling (from v0.3.0) ✅
+**Status: Released Early**
+
+Daily quota window alignment with early dummy commands.
+
+**Implementation:**
+- `ccremote schedule --time "5:00"` command
+- Automatic daily recurrence at specified time
+- Smart staging (command typed 5s after start, executed at scheduled time)
+- Discord notifications for quota window start
+
+**Code:**
+- `src/commands/schedule.ts`: Complete implementation
+- `src/core/monitor.ts`: Lines 170-195, 876-933 for execution logic
+- `src/utils/quota.ts`: Message generation
+
+---
+
+## Technical Considerations
+
+### Implemented Architecture (v0.1.0-v0.2.0)
+
+**Smart Polling System:**
+- Uses polling instead of timers for sleep/wake cycle reliability
+- Dynamic intervals: 2s (default), faster near quota reset times
+- Self-correcting and platform-independent
+- Zero external scheduling dependencies
+
+**Pattern Detection:**
+- Comprehensive approval dialog detection with color validation
+- Usage limit detection with terminal state validation
+- Task completion via idle detection (10s idle threshold)
+- Prevents false positives from pasted text and session lists
+
+**Discord Integration:**
+- Graceful degradation when Discord unavailable
+- Automatic retry with exponential backoff
+- Health check system with reconnection
+- Channel lifecycle management (create → active → archived)
+
+### Security Model (Current & Planned)
+
+**Current Security (v0.2.0):**
+- Channel-based authorization for all Discord commands
+- User whitelist for session access
+- No sensitive data in Discord messages
+- Session state isolation
+
+**Planned Security (v0.3.0):**
+- Command execution whitelist (no dangerous commands)
+- Per-user rate limiting (5 commands/minute)
+- Comprehensive audit logging
+- Command sanitization and validation
+
+---
+
+## Future Roadmap
+
+### v0.3.0 - Remote Control & Command Execution
+**Target: Q1 2025**
+
+#### Discord-to-Claude Command System
 **Priority: High**
 
 Send commands from Discord directly to Claude Code sessions.
 
-**Implementation:**
+**Planned Implementation:**
 - New Discord command: `/send <command>`
 - Security-first design with command validation whitelist
 - Rate limiting (5 commands/minute per user)
@@ -29,139 +141,59 @@ Send commands from Discord directly to Claude Code sessions.
 - Authorization: only authorized users in session-specific channels
 - Command sanitization and validation before execution
 
-#### 2. Task Completion Detection
-**Priority: Medium**
-
-Get notifications when Claude finishes tasks and stops processing.
-
-**Implementation:**
-- Idle detection: no output changes for 10+ seconds
-- Smart pattern matching for Claude's waiting-for-input state
-- New notification type: `task_completed`
-- Debounced notifications to prevent spam
-
-**Integration:**
-- Extends existing monitoring system in `src/core/monitor.ts`
-- Uses established Discord notification patterns
-
-#### 3. Tmux Output Display ("Screenshots")
-**Priority: Medium**
-
-View current tmux session content in Discord as text.
-
-**Implementation:**
-- New Discord command: `/output` or `/screenshot`
-- Monospaced formatting using Discord code blocks
-- Smart message splitting for long output (Discord 2000 char limit)
-- Configurable context (default: last 50 lines)
-
-**Technical Approach:**
-- Leverages existing `tmux.capturePane()` functionality
-- Formats output with triple backticks for readability
-
-#### 4. Enhanced Session Cleanup
-**Priority: Low**
-
-Improve the cleanup process to properly archive Discord channels for ended sessions.
-
-**Implementation:**
-- Extend existing `ccremote clean` command
-- Archive Discord channels instead of leaving them orphaned
-- Rename channels with "archived-" prefix
-- Remove send permissions but preserve read access for history
-- Clean up channel-session mappings
-
-**Integration:**
-- Enhances existing cleanup in `DiscordBot.cleanupSessionChannel()`
-- Extends `ccremote clean` command functionality
-
----
-
-## Technical Considerations
-
-### Smart Polling Architecture
-
-The monitoring system uses intelligent polling rather than timer-based scheduling to handle laptop sleep/wake cycles reliably:
-
-**Why Polling Over Timers:**
-- `setTimeout()` breaks on laptop sleep (timers fire late or not at all)
-- Node.js scheduling libraries have sleep/wake drift issues
-- Polling is self-correcting and sleep-robust
-
-**Dynamic Polling Intervals:**
-- 30 seconds: Normal monitoring (low CPU usage)
-- 5 seconds: When reset time approaches
-- 1 second: Final moments before reset
-
-This approach provides reliability across all platforms without external dependencies.
-
-### Security Model
-
-**Command Execution Security:**
-- Whitelist-only command validation
-- Per-user rate limiting
-- Session isolation (commands bound to Discord channels)
-- Comprehensive audit logging
-
-**Discord Integration Security:**
-- Channel-based authorization (existing pattern)
-- No sensitive data in Discord messages
-- Session state isolation
-
----
-
-## Future Roadmap
-
-### v0.3.0 - Smart Scheduling
-**Target: Q2 2024**
-
-- Early window scheduling (3-5am commands to optimize usage windows)
-- 5-hour window pattern optimization (5am→10am→3pm→8pm)
-- Sleep/wake robust scheduling system
-- Smart retry logic with exponential backoff
+**New Components Required:**
+- `src/security/command-validator.ts`: Command whitelist and validation
+- Rate limiting implementation in Discord message handler
+- Audit logging system for command execution
 
 ### v0.4.0 - Enhanced Discord Integration
-**Target: Q3 2024**
+**Target: Q2 2025**
 
 - Rich Discord embeds with status colors
-- Interactive session management via Discord
+- Interactive session management via Discord (pause/resume/restart)
 - Multi-session support through single Discord bot
-- Customizable notification preferences
+- Customizable notification preferences per user
+- Discord slash command support (instead of text commands)
 
-### v0.5.0 - Session Management
-**Target: Q4 2024**
+### v0.5.0 - Session Management & Collaboration
+**Target: Q3 2025**
 
 - Session templates and presets
 - Advanced logging and session history
 - Session sharing and collaboration features
-- Integration with other development tools
+- Integration with other development tools (GitHub, VS Code)
+- Session analytics and usage reports
 
 ---
 
 ## Implementation Notes
 
-### New Components Required
+### Architecture Achievements
 
-1. **CommandValidator** (`src/security/command-validator.ts`)
-   - Command whitelist management
-   - Rate limiting implementation
-   - Security validation and sanitization
+**Completed in v0.2.0:**
+- Task completion detection fully integrated into `src/core/monitor.ts`
+- Output formatting built into `DiscordBot.formatOutputForDiscord()` method
+- Discord channel lifecycle management (create → active → archived)
+- Orphaned resource detection and cleanup
+- Quota scheduling system with daily recurrence
 
-2. **TaskCompletionDetector** (extend existing `src/core/monitor.ts`)
-   - Idle detection patterns
-   - Completion state recognition
-   - Notification debouncing
+**Current Architecture Strengths:**
+- Smart polling system handles sleep/wake cycles reliably
+- Graceful degradation when Discord is unavailable
+- Comprehensive test coverage for monitoring patterns
+- Session state persistence across restarts
 
-3. **OutputFormatter** (`src/utils/output-formatter.ts`)
-   - Discord message formatting
-   - Message length handling
-   - Monospace code block generation
+### Future Integration Strategy (v0.3.0+)
 
-### Integration Strategy
+**For Discord-to-Claude Command System:**
+- Extend existing `DiscordBot.handleMessage()` for `/send` commands
+- New security layer: `src/security/command-validator.ts`
+- Rate limiting per user with in-memory tracking
+- Audit logging to dedicated log files
 
-- Extend existing `DiscordBot` message handling
-- Add new notification types to existing system
-- Leverage current tmux integration
-- Maintain backward compatibility
+**Backward Compatibility:**
+- All existing commands and patterns remain unchanged
+- New features are additive, not breaking
+- Configuration remains backward compatible
 
-This plan focuses on enhancing remote control capabilities while maintaining the robust foundation established in v0.1.0.
+This plan focuses on building secure remote control capabilities while maintaining the robust monitoring foundation established in v0.1.0-v0.2.0.
