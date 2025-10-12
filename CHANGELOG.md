@@ -18,6 +18,7 @@ All notable changes to ccremote will be documented in this file.
 ### Technical Improvements
 - **Error Handling**: Improved error handling for Discord bot failures and graceful degradation when Discord is unavailable
 - **Code Quality**: Enhanced type safety and pattern matching for monitoring system
+- **Update Notifications**: Automatic daily check for new versions with non-intrusive CLI notifications
 
 ## [v0.1.0] - 2025-09-24
 
