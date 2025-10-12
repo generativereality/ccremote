@@ -43,9 +43,6 @@ export class Monitor extends EventEmitter {
 
 	// Pattern matching for Claude Code messages
 	public readonly patterns = {
-		// Usage limit patterns - must contain full contextual phrases to avoid false positives
-		// Real limit messages have explanatory text, not just session summary entries
-		usageLimit: /(?:you've\s+reached\s+your.*?(?:conversation\s+)?limit|your\s+(?:conversation\s+)?limit\s+(?:will\s+)?reset|usage\s+limit\s+reached\.\s+your\s+limit\s+resets|continue\s+this\s+conversation\s+(?:later\s+)?(?:when|by)|you\s+can\s+continue\s+(?:this\s+)?conversation\s+when)/i,
 		// Claude Code approval dialog patterns - from working proof-of-concept
 		approvalDialog: {
 			// Must have all three components for valid approval dialog
@@ -757,6 +754,7 @@ export class Monitor extends EventEmitter {
 
 	/**
 	 * Try to continue immediately - similar to POC logic
+	 * Returns success only if Claude has actually continued and is actively responding
 	 */
 	private async tryImmediateContinuation(sessionId: string, _output: string): Promise<{ success: boolean; response?: string }> {
 		try {
@@ -774,15 +772,20 @@ export class Monitor extends EventEmitter {
 			await new Promise(resolve => setTimeout(resolve, 3000));
 			const responseOutput = await this.tmuxManager.capturePane(session.tmuxSession);
 
-			// Check if the same limit message still appears (use simple pattern check)
-			const stillHasLimitMessage = this.hasLimitMessage(responseOutput);
+			// Check if limit is still active by looking for limit message near the end of output
+			// Split output into lines and check the last ~10 lines for active limit state
+			const lines = responseOutput.split('\n');
+			const recentLines = lines.slice(-15).join('\n'); // Last 15 lines
 
-			if (stillHasLimitMessage) {
-				logger.info('Immediate continuation failed - limit message still present');
+			const hasRecentLimitMessage = this.hasLimitMessage(recentLines);
+			const isActiveLimit = hasRecentLimitMessage && this.isActiveTerminalState(recentLines);
+
+			if (isActiveLimit) {
+				logger.info('Immediate continuation failed - limit message still active in recent output');
 				return { success: false, response: responseOutput };
 			}
 			else {
-				logger.info('Immediate continuation successful - no limit message in response');
+				logger.info('Immediate continuation successful - no active limit in recent output');
 				return { success: true, response: responseOutput };
 			}
 		}
@@ -1020,10 +1023,9 @@ if (import.meta.vitest) {
 			void monitor.stopAll();
 		});
 
-		it('should detect usage limit patterns', () => {
+		it('should detect usage limit messages', () => {
 			const testOutput = '5-hour limit reached. Your limit resets at 3:45pm';
-			const patterns = (monitor as Monitor & { [key: string]: any }).patterns as { usageLimit: RegExp };
-			expect(patterns.usageLimit.test(testOutput)).toBe(true);
+			expect(monitor.hasLimitMessage(testOutput)).toBe(true);
 		});
 
 		it('should calculate new output correctly', () => {
