@@ -416,6 +416,12 @@ export class Monitor extends EventEmitter {
 				await this.sessionManager.updateSession(sessionId, { status: 'active' });
 				return; // Exit early, no notification needed
 			}
+
+			// If continuation failed, use the response from the continuation attempt for reset time extraction
+			// This ensures we get the full limit message with the reset time
+			if (continueResult.response) {
+				output = continueResult.response;
+			}
 		}
 
 		// Immediate continuation failed or already attempted - schedule for later
@@ -765,28 +771,46 @@ export class Monitor extends EventEmitter {
 
 			logger.info(`Trying immediate continuation for session ${sessionId}`);
 
+			// Capture output before sending continue
+			const outputBefore = await this.tmuxManager.capturePane(session.tmuxSession);
+
 			// Send continue command
 			await this.tmuxManager.sendContinueCommand(session.tmuxSession);
 
 			// Wait for response
 			await new Promise(resolve => setTimeout(resolve, 3000));
-			const responseOutput = await this.tmuxManager.capturePane(session.tmuxSession);
+			const outputAfter = await this.tmuxManager.capturePane(session.tmuxSession);
 
-			// Check if limit is still active by looking for limit message near the end of output
-			// Split output into lines and check the last ~10 lines for active limit state
-			const lines = responseOutput.split('\n');
-			const recentLines = lines.slice(-15).join('\n'); // Last 15 lines
+			// Check if limit message is present in the full output
+			const hasLimitInFull = this.hasLimitMessage(outputAfter);
 
-			const hasRecentLimitMessage = this.hasLimitMessage(recentLines);
-			const isActiveLimit = hasRecentLimitMessage && this.isActiveTerminalState(recentLines);
+			// Check if there's actual new content (not just the echo of "continue" command)
+			// If the output is essentially the same or only shows the limit message, continuation failed
+			const newContent = outputAfter.substring(outputBefore.length).trim();
+			const isJustLimitResponse = newContent.length < 50 && hasLimitInFull; // Very short response with limit = failed
 
-			if (isActiveLimit) {
-				logger.info('Immediate continuation failed - limit message still active in recent output');
-				return { success: false, response: responseOutput };
+			if (hasLimitInFull && isJustLimitResponse) {
+				logger.info('Immediate continuation failed - limit message still present and no substantial new activity');
+				return { success: false, response: outputAfter };
+			}
+			else if (hasLimitInFull) {
+				// Limit message present but with substantial new content - check if it's just historical
+				const lines = outputAfter.split('\n');
+				const recentLines = lines.slice(-15).join('\n');
+				const hasRecentLimit = this.hasLimitMessage(recentLines) && this.isActiveTerminalState(recentLines);
+
+				if (hasRecentLimit) {
+					logger.info('Immediate continuation failed - limit message still active');
+					return { success: false, response: outputAfter };
+				}
+				else {
+					logger.info('Immediate continuation successful - limit in history but Claude is active');
+					return { success: true, response: outputAfter };
+				}
 			}
 			else {
-				logger.info('Immediate continuation successful - no active limit in recent output');
-				return { success: true, response: responseOutput };
+				logger.info('Immediate continuation successful - no limit message found');
+				return { success: true, response: outputAfter };
 			}
 		}
 		catch (error) {
@@ -1011,6 +1035,7 @@ if (import.meta.vitest) {
 				sessionExists: vi.fn(),
 				capturePane: vi.fn(),
 				sendKeys: vi.fn(),
+				sendContinueCommand: vi.fn(),
 			};
 			mockDiscordBot = {
 				sendNotification: vi.fn(),
@@ -1328,6 +1353,95 @@ Working on something
 				expect(handleTaskCompletionSpy).not.toHaveBeenCalled();
 
 				handleTaskCompletionSpy.mockRestore();
+			});
+		});
+
+		// Test immediate continuation logic
+		describe('Immediate Continuation Logic', () => {
+			it('should detect continuation failure when limit message persists with minimal new content', async () => {
+				const sessionId = 'test-session';
+				const session = { id: sessionId, name: 'test', tmuxSession: 'test-tmux' };
+				mockSessionManager.getSession = vi.fn().mockResolvedValue(session);
+
+				const beforeOutput = 'Some previous output\n> ';
+				const afterOutput = `Some previous output\n> continue\n  Session limit reached ∙ resets 8pm\n     /upgrade to increase your usage limit.\n\n> `;
+
+				let callCount = 0;
+				mockTmuxManager.capturePane = vi.fn().mockImplementation(() => {
+					callCount++;
+					return callCount === 1 ? beforeOutput : afterOutput;
+				});
+				mockTmuxManager.sendKeys = vi.fn();
+
+				const result = await (monitor as any).tryImmediateContinuation(sessionId, 'limit output');
+
+				expect(result.success).toBe(false);
+				expect(result.response).toBe(afterOutput);
+			});
+
+			it('should detect continuation success when Claude starts responding', async () => {
+				const sessionId = 'test-session';
+				const session = { id: sessionId, name: 'test', tmuxSession: 'test-tmux' };
+				mockSessionManager.getSession = vi.fn().mockResolvedValue(session);
+
+				const beforeOutput = 'Some previous output\n> ';
+				const afterOutput = `Some previous output\n> continue\nLet me help you with that. Here's what I found...\n[substantial response content here that's more than 50 chars]\n\n> `;
+
+				let callCount = 0;
+				mockTmuxManager.capturePane = vi.fn().mockImplementation(() => {
+					callCount++;
+					return callCount === 1 ? beforeOutput : afterOutput;
+				});
+				mockTmuxManager.sendKeys = vi.fn();
+
+				const result = await (monitor as any).tryImmediateContinuation(sessionId, 'limit output');
+
+				expect(result.success).toBe(true);
+				expect(result.response).toBe(afterOutput);
+			});
+
+			it('should detect continuation success when limit is only in history', async () => {
+				const sessionId = 'test-session';
+				const session = { id: sessionId, name: 'test', tmuxSession: 'test-tmux' };
+				mockSessionManager.getSession = vi.fn().mockResolvedValue(session);
+
+				// Make the output long enough so the limit message is NOT in the recent 15 lines
+				const manyLinesOfOutput = Array(20).fill('Some command output line').join('\n');
+				const beforeOutput = 'Session limit reached ∙ resets 8pm\n> ';
+				const afterOutput = `Session limit reached ∙ resets 8pm\n> continue\n\n⏺ Bash(bun run lint)\n  ⎿  Found '/Users/motin/.nvmrc' with version <v22>\n     Now using node v22.19.0 (npm v10.9.3)\n     $ eslint --cache .\n${manyLinesOfOutput}\n\n> `;
+
+				let callCount = 0;
+				mockTmuxManager.capturePane = vi.fn().mockImplementation(() => {
+					callCount++;
+					return callCount === 1 ? beforeOutput : afterOutput;
+				});
+				mockTmuxManager.sendKeys = vi.fn();
+
+				const result = await (monitor as any).tryImmediateContinuation(sessionId, 'limit output');
+
+				expect(result.success).toBe(true);
+				expect(result.response).toBe(afterOutput);
+			});
+
+			it('should detect continuation failure when recent output still shows active limit', async () => {
+				const sessionId = 'test-session';
+				const session = { id: sessionId, name: 'test', tmuxSession: 'test-tmux' };
+				mockSessionManager.getSession = vi.fn().mockResolvedValue(session);
+
+				const beforeOutput = 'Previous work here\nSession limit reached ∙ resets 8pm\n> ';
+				const afterOutput = `Previous work here\nSession limit reached ∙ resets 8pm\n> continue\nSome text here\nBut then:\n  Session limit reached ∙ resets 8pm\n     /upgrade to increase your usage limit.\n\n──────────────────────────────────────────────────────────────────────\n>\n──────────────────────────────────────────────────────────────────────`;
+
+				let callCount = 0;
+				mockTmuxManager.capturePane = vi.fn().mockImplementation(() => {
+					callCount++;
+					return callCount === 1 ? beforeOutput : afterOutput;
+				});
+				mockTmuxManager.sendKeys = vi.fn();
+
+				const result = await (monitor as any).tryImmediateContinuation(sessionId, 'limit output');
+
+				expect(result.success).toBe(false);
+				expect(result.response).toBe(afterOutput);
 			});
 		});
 
