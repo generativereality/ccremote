@@ -458,26 +458,44 @@ export class DiscordBot {
 			const channel = await this.client.channels.fetch(channelId) as TextChannel;
 			if (channel && channel.type === ChannelType.GuildText) {
 				// Send a final message before cleanup
-				await channel.send(`🏁 Session ${sessionId} ended. This channel will be archived.`);
+				await channel.send(`🏁 Session ${sessionId} ended. This channel will be archived and hidden from the server list.`);
 
-				// Archive the channel by renaming it and removing permissions for normal users
+				// Archive the channel by renaming it and removing ALL view permissions
 				const archivedName = `archived-${channel.name}`;
 				await channel.setName(archivedName);
 
-				// Remove send permissions for authorized users, but keep view permissions for history
+				// Hide channel from everyone (including authorized users)
+				// This removes it from the server's channel list
+				const guild = channel.guild;
+
+				// Remove view permissions for @everyone
+				await channel.permissionOverwrites.edit(guild.roles.everyone, {
+					ViewChannel: false,
+				});
+
+				// Remove view permissions for all authorized users
 				for (const userId of this.authorizedUsers) {
 					try {
-						// Fetch user first to ensure proper permission management
 						const user = await this.client.users.fetch(userId);
 						await channel.permissionOverwrites.edit(user, {
-							ViewChannel: true,
-							ReadMessageHistory: true,
+							ViewChannel: false,
+							ReadMessageHistory: false,
 							SendMessages: false,
 						});
 					}
 					catch (error) {
 						console.warn(`Failed to update permissions for user ${userId} during cleanup:`, error);
 					}
+				}
+
+				// Keep bot access for potential history retrieval
+				const botMember = guild.members.me;
+				if (botMember) {
+					await channel.permissionOverwrites.edit(botMember, {
+						ViewChannel: true,
+						ReadMessageHistory: true,
+						SendMessages: false,
+					});
 				}
 			}
 		}
@@ -671,25 +689,42 @@ export class DiscordBot {
 			}
 
 			// Send a final message before archiving
-			await channel.send(`🏁 Orphaned channel detected during cleanup. This channel will be archived as it's no longer connected to an active session.`);
+			await channel.send(`🏁 Orphaned channel detected during cleanup. This channel will be archived and hidden from the server list as it's no longer connected to an active session.`);
 
-			// Archive the channel by renaming it and removing permissions
+			// Archive the channel by renaming it and removing ALL view permissions
 			const archivedName = `archived-${channel.name}`;
 			await channel.setName(archivedName);
 
-			// Remove send permissions for authorized users, but keep view permissions for history
+			const guild = channel.guild;
+
+			// Remove view permissions for @everyone
+			await channel.permissionOverwrites.edit(guild.roles.everyone, {
+				ViewChannel: false,
+			});
+
+			// Remove view permissions for all authorized users
 			for (const userId of this.authorizedUsers) {
 				try {
 					const user = await this.client.users.fetch(userId);
 					await channel.permissionOverwrites.edit(user, {
-						ViewChannel: true,
-						ReadMessageHistory: true,
+						ViewChannel: false,
+						ReadMessageHistory: false,
 						SendMessages: false,
 					});
 				}
 				catch (error) {
 					console.warn(`Failed to update permissions for user ${userId} during orphaned cleanup:`, error);
 				}
+			}
+
+			// Keep bot access for potential history retrieval
+			const botMember = guild.members.me;
+			if (botMember) {
+				await channel.permissionOverwrites.edit(botMember, {
+					ViewChannel: true,
+					ReadMessageHistory: true,
+					SendMessages: false,
+				});
 			}
 
 			// Clean up our internal mappings
