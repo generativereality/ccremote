@@ -122,48 +122,182 @@ Daily quota window alignment with early dummy commands.
 
 ## Future Roadmap
 
-### v0.3.0 - Remote Control & Command Execution
+### v0.3.0 - Queue Watcher & Project Automation
 **Target: Q1 2026**
-
-#### Discord-to-Claude Command System
 **Priority: High**
 
-Send commands from Discord directly to Claude Code sessions.
+### Queue-Based Session Orchestration
 
-**Planned Implementation:**
-- New Discord command: `/send <command>`
-- Security-first design with command validation whitelist
-- Rate limiting (5 commands/minute per user)
-- Full audit logging for all executed commands
-- Session-scoped execution (commands only work in session's Discord channel)
+Transform ccremote into a generic queue watcher that automatically spawns Claude Code sessions to process items in a `_q/` folder structure.
 
-**Security Considerations:**
-- Whitelist approach: only safe commands allowed (no `rm`, `sudo`, etc.)
-- Authorization: only authorized users in session-specific channels
-- Command sanitization and validation before execution
+**Use Case:** Any project that needs automated async Claude processing based on a simple queue system.
 
-**New Components Required:**
-- `src/security/command-validator.ts`: Command whitelist and validation
-- Rate limiting implementation in Discord message handler
-- Audit logging system for command execution
+#### Core Features
 
-### v0.4.0 - Enhanced Discord Integration
+**1. Queue Folder Monitoring**
+- Watch `_q/high/`, `_q/medium/`, `_q/low/` folders in project directory (CWD)
+- Support both files (.md) and folders (for multi-file items like transaction exports)
+- Priority-based processing schedules:
+  - High: Every 10 seconds
+  - Medium: Every 1 minute
+  - Low: Every 15 minutes
+
+**2. Automatic Session Spawning**
+- Spawn Claude Code sessions with custom prompts describing queue contents
+- Use `--permission-mode acceptEdits` flag
+- Session naming: `q-{priority}-{timestamp}`
+- Discord integration for session tracking
+
+**3. HTTP API (Fastify)**
+- `POST /queue` - Create queue items (for Custom GPTs, webhooks)
+- `GET /queue/status` - Get item counts per priority
+- `GET /queue/items/:priority` - List items in priority folder
+- Bearer token authentication via env var
+- Customizable port (default: 3000)
+
+**4. Queue Monitoring**
+- Session timeout detection (default: 10 minutes)
+- High-priority backlog alerts (>10 items)
+- Discord notifications for queue status
+
+#### New Commands
+
+```bash
+# Start queue watcher in current directory
+ccremote watch
+
+# Check queue status
+ccremote queue status
+
+# Manually trigger processing
+ccremote queue process high
+
+# Monitor sessions + queue backlog  
+ccremote monitor
+```
+
+#### Implementation Details
+
+**New Files:**
+- `src/managers/QueueManager.ts` - Queue watcher logic
+- `src/managers/QueueMonitor.ts` - Backlog & timeout monitoring
+- `src/api/server.ts` - Fastify HTTP API
+- `src/commands/watch.ts` - Watch command
+- `src/commands/queue.ts` - Queue status/process commands
+- `src/commands/monitor.ts` - Monitoring command
+
+**Key Principles:**
+- Works with any project that has `_q/` folder structure
+- Claude discovers CLAUDE.md naturally (no --prompt-file flag)
+- Custom prompts describe queue contents dynamically
+- CWD-based operation (no configuration needed for project path)
+
+**Integration Points:**
+- Extends existing SessionManager for spawning
+- Uses existing Discord bot for notifications
+- Builds on current tmux integration
+- Compatible with quota scheduling system
+
+#### Example Workflow
+
+User drops files into queue:
+```
+my-project/
+├── _q/
+│   ├── high/
+│   │   └── urgent-task.md
+│   ├── medium/
+│   │   ├── voice-memo-transcription.md
+│   │   └── photo-batch/  (folder with multiple files)
+│   └── low/
+│       └── transactions-export/
+├── CLAUDE.md
+└── ... other project files
+```
+
+ccremote spawns sessions:
+```
+claude "You have 1 item in high priority queue:
+- 📄 urgent-task.md
+
+Please process according to CLAUDE.md..." --permission-mode acceptEdits
+```
+
+Claude processes, moves to `_q/archive/{priority}/`, updates project files.
+
+---
+
+**Dependencies:**
+- Fastify (HTTP server)
+- yaml (for frontmatter parsing)
+- Existing ccremote infrastructure
+
+**Estimated Effort:** 2-3 weeks
+
+**Success Criteria:**
+- Queue watcher runs reliably in background
+- Sessions spawn on schedule (10s, 1min, 15min)
+- HTTP API accepts external queue items
+- Discord shows queue processing status
+- Works with multiple concurrent projects
+
+---
+
+### v0.4.0 - Enhanced Remote Control & Discord Integration
 **Target: Q2 2026**
+**Priority: Medium**
 
-- Rich Discord embeds with status colors
-- Interactive session management via Discord (pause/resume/restart)
-- Multi-session support through single Discord bot
-- Customizable notification preferences per user
-- Discord slash command support (instead of text commands)
+Tighter Discord integration with better remote control capabilities for active session management.
 
-### v0.5.0 - Session Management & Collaboration
-**Target: Q3 2026**
+#### Core Features
 
-- Session templates and presets
-- Advanced logging and session history
-- Session sharing and collaboration features
-- Integration with other development tools (GitHub, VS Code)
-- Session analytics and usage reports
+**1. Discord Command Sending**
+- `/send <command>` - Send commands directly to Claude Code sessions from Discord
+- Session-scoped execution (commands only work in session's Discord channel)
+- Basic command validation and user authorization
+
+**2. Rich Discord UI**
+- Rich embeds with status colors for different notification types
+- Better formatted session status information
+- Visual indicators for session state (active/waiting/ended)
+
+**3. Interactive Session Controls**
+- Pause/resume sessions via Discord commands
+- Restart sessions when needed
+- Stop/kill session controls from Discord
+
+**4. Multi-Session Management**
+- Single Discord bot managing multiple concurrent sessions
+- Dedicated channels per session with clear organization
+- Session switching and status overview across all active sessions
+
+#### New Commands
+
+```bash
+# Discord commands (in session channel):
+/send <command>     # Send command to Claude session
+/pause              # Pause session
+/resume             # Resume session
+/restart            # Restart session
+/status             # Get detailed session status
+```
+
+#### Implementation Details
+
+**New Files:**
+- `src/core/session-controller.ts` - Session control operations (pause/resume/restart)
+- Enhanced `src/core/discord.ts` - Rich embeds and new command handlers
+
+**Key Improvements:**
+- Better Discord UX with embeds and colors
+- Real-time session control from Discord
+- Cleaner multi-session management
+- More responsive session operations
+
+**Integration Points:**
+- Extends existing Discord bot with new commands
+- Builds on tmux integration for session control
+- Uses existing session state management
 
 ---
 
@@ -184,17 +318,8 @@ Send commands from Discord directly to Claude Code sessions.
 - Comprehensive test coverage for monitoring patterns
 - Session state persistence across restarts
 
-### Future Integration Strategy (v0.3.0+)
-
-**For Discord-to-Claude Command System:**
-- Extend existing `DiscordBot.handleMessage()` for `/send` commands
-- New security layer: `src/security/command-validator.ts`
-- Rate limiting per user with in-memory tracking
-- Audit logging to dedicated log files
-
 **Backward Compatibility:**
 - All existing commands and patterns remain unchanged
 - New features are additive, not breaking
 - Configuration remains backward compatible
 
-This plan focuses on building secure remote control capabilities while maintaining the robust monitoring foundation established in v0.1.0-v0.2.0.
