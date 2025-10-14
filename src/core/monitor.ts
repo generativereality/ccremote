@@ -1017,6 +1017,7 @@ export class Monitor extends EventEmitter {
 }
 
 if (import.meta.vitest) {
+	/* eslint-disable ts/no-unsafe-assignment */
 	const vitest = await import('vitest');
 	const { beforeEach, afterEach, describe, it, expect, vi } = vitest;
 
@@ -1406,7 +1407,7 @@ Working on something
 				mockSessionManager.getSession = vi.fn().mockResolvedValue(session);
 
 				// Make the output long enough so the limit message is NOT in the recent 15 lines
-				const manyLinesOfOutput = Array(20).fill('Some command output line').join('\n');
+				const manyLinesOfOutput = Array.from({ length: 20 }).fill('Some command output line').join('\n');
 				const beforeOutput = 'Session limit reached ∙ resets 8pm\n> ';
 				const afterOutput = `Session limit reached ∙ resets 8pm\n> continue\n\n⏺ Bash(bun run lint)\n  ⎿  Found '/Users/motin/.nvmrc' with version <v22>\n     Now using node v22.19.0 (npm v10.9.3)\n     $ eslint --cache .\n${manyLinesOfOutput}\n\n> `;
 
@@ -1544,19 +1545,17 @@ You can continue this conversation when your usage limit resets.
 			});
 
 			it('should extract time from Claude Code v2 format (e.g. "4am")', () => {
-				// eslint-disable-next-line ts/no-unsafe-assignment
 				const extractResetTime = (monitor as any).extractResetTime.bind(monitor);
-				// eslint-disable-next-line ts/no-unsafe-assignment
+
 				const resetTime = extractResetTime(claudeV2LimitFixture);
 				expect(resetTime).toBe('4am');
 			});
 
 			it('should extract time from verbose limit messages', () => {
-				// eslint-disable-next-line ts/no-unsafe-assignment
 				const extractResetTime = (monitor as any).extractResetTime.bind(monitor);
-				// eslint-disable-next-line ts/no-unsafe-assignment
+
 				const resetTime1 = extractResetTime(realLimitMessageFixture);
-				// eslint-disable-next-line ts/no-unsafe-assignment
+
 				const resetTime2 = extractResetTime(anotherRealLimitFixture);
 				expect(resetTime1).toBe('3:45pm');
 				expect(resetTime2).toBe('10:30am');
