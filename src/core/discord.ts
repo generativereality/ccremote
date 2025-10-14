@@ -291,15 +291,21 @@ export class DiscordBot {
 		}
 
 		// Check if a channel with this session name already exists in the guild
-		const channelName = `ccremote-${sessionName.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`;
+		// Include project name prefix (like log files do)
+		const path = await import('node:path');
+		const projectName = path.basename(process.cwd());
+		const channelName = `${projectName}-${sessionName}`.toLowerCase().replace(/[^a-z0-9-]/g, '-');
 		console.info(`[DISCORD] Checking for existing channel with name: ${channelName}`);
 
 		try {
 			const guild = await this.client.guilds.fetch(this.guildId);
 			if (guild) {
-				// Look for existing channel by name
+				// Look for existing channel by name, excluding archived channels
 				const existingChannel = guild.channels.cache.find(
-					channel => channel.name === channelName && channel.isTextBased(),
+					channel =>
+						channel.name === channelName
+						&& channel.isTextBased()
+						&& !channel.name.startsWith('_archived-'),
 				);
 
 				if (existingChannel) {
@@ -332,8 +338,7 @@ export class DiscordBot {
 				}
 				console.info(`[DISCORD] Guild fetched successfully: ${guild.name}`);
 
-				// Create a private text channel named after the session
-				const channelName = `ccremote-${sessionName.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`;
+				// Use the channel name already calculated with project prefix
 				console.info(`[DISCORD] Will create channel with name: ${channelName}`);
 
 				// Create channel with bot permissions from the start
@@ -489,7 +494,7 @@ export class DiscordBot {
 				);
 
 				// Archive the channel by renaming it and removing ALL view permissions
-				const archivedName = `archived-${channel.name}`;
+				const archivedName = `_archived-${channel.name}`;
 				await channel.setName(archivedName);
 
 				// Hide channel from everyone (including authorized users)
@@ -665,10 +670,11 @@ export class DiscordBot {
 				return [];
 			}
 
-			// Get all channels that start with "ccremote-" but aren't "archived-"
+			// Get all ccremote channels but exclude archived ones
+			// Note: With project prefixes, channels are named like "projectname-sessionname"
+			// We filter out archived channels which start with "_archived-"
 			const ccremoteChannels = guild.channels.cache.filter(channel =>
-				channel.name.startsWith('ccremote-')
-				&& !channel.name.startsWith('archived-')
+				!channel.name.startsWith('_archived-')
 				&& channel.type === ChannelType.GuildText,
 			);
 
@@ -746,7 +752,7 @@ export class DiscordBot {
 			);
 
 			// Archive the channel by renaming it and removing ALL view permissions
-			const archivedName = `archived-${channel.name}`;
+			const archivedName = `_archived-${channel.name}`;
 			await channel.setName(archivedName);
 
 			// Remove view permissions for @everyone
