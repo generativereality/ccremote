@@ -122,18 +122,20 @@ export const cleanCommand = define({
 				}
 			}
 
-			// Check for orphaned Discord channels regardless of session cleanup
+			// Check for orphaned Discord channels and archived channels regardless of session cleanup
 			let orphanedChannels: string[] = [];
+			let archivedChannels: string[] = [];
 			if (discordBot) {
 				const activeSessions = sessions
 					.filter(session => !cleanupSessions.includes(session))
 					.map(session => ({ id: session.id, name: session.name }));
 
 				orphanedChannels = await discordBot.findOrphanedChannels(activeSessions);
+				archivedChannels = await discordBot.findArchivedChannels();
 			}
 
-			// Early return only if no sessions AND no orphaned channels
-			if (cleanupSessions.length === 0 && orphanedChannels.length === 0) {
+			// Early return only if no sessions AND no orphaned channels AND no archived channels
+			if (cleanupSessions.length === 0 && orphanedChannels.length === 0 && archivedChannels.length === 0) {
 				consola.success('✨ No sessions or orphaned channels need cleaning');
 				if (discordBot) {
 					await discordBot.shutdown();
@@ -154,15 +156,18 @@ export const cleanCommand = define({
 			}
 
 			if (discordBot) {
-				const totalChannelsToArchive = cleanupSessions.length + orphanedChannels.length;
+				const totalChannelsToDelete = cleanupSessions.length + orphanedChannels.length + archivedChannels.length;
 
-				if (totalChannelsToArchive > 0) {
-					consola.info(`\n📺 Found ${totalChannelsToArchive} Discord channels to archive`);
+				if (totalChannelsToDelete > 0) {
+					consola.info(`\n📺 Found ${totalChannelsToDelete} Discord channels to delete`);
 					if (cleanupSessions.length > 0) {
 						consola.info(`  • ${cleanupSessions.length} channels from ended sessions`);
 					}
 					if (orphanedChannels.length > 0) {
 						consola.info(`  • ${orphanedChannels.length} orphaned channels`);
+					}
+					if (archivedChannels.length > 0) {
+						consola.info(`  • ${archivedChannels.length} archived channels from previous runs`);
 					}
 				}
 			}
@@ -218,33 +223,49 @@ export const cleanCommand = define({
 				}
 			}
 
-			// Archive Discord channels for ended sessions
-			let archivedChannels = 0;
+			// Delete Discord channels for ended sessions
+			let deletedChannels = 0;
 			if (discordBot) {
-				// Archive channels for sessions being cleaned up
+				// Delete channels for sessions being cleaned up
 				for (const session of cleanupSessions) {
 					try {
 						await discordBot.cleanupSessionChannel(session.id);
-						archivedChannels++;
-						consola.info(`📺 Archived Discord channel for session ${session.id}`);
+						deletedChannels++;
+						consola.info(`📺 Deleted Discord channel for session ${session.id}`);
 					}
 					catch (error: unknown) {
-						consola.warn(`Failed to archive Discord channel for ${session.id}: ${error instanceof Error ? error.message : String(error)}`);
+						consola.warn(`Failed to delete Discord channel for ${session.id}: ${error instanceof Error ? error.message : String(error)}`);
 					}
 				}
 
-				// Archive orphaned channels that were already found
+				// Delete orphaned channels that were already found
 				if (orphanedChannels.length > 0) {
 					for (const channelId of orphanedChannels) {
 						try {
-							const success = await discordBot.archiveOrphanedChannel(channelId);
+							const success = await discordBot.deleteOrphanedChannel(channelId);
 							if (success) {
-								archivedChannels++;
-								consola.info(`📺 Archived orphaned Discord channel ${channelId}`);
+								deletedChannels++;
+								consola.info(`📺 Deleted orphaned Discord channel ${channelId}`);
 							}
 						}
 						catch (error: unknown) {
-							consola.warn(`Failed to archive orphaned channel ${channelId}: ${error instanceof Error ? error.message : String(error)}`);
+							consola.warn(`Failed to delete orphaned channel ${channelId}: ${error instanceof Error ? error.message : String(error)}`);
+						}
+					}
+				}
+
+				// Delete archived channels from previous runs
+				if (archivedChannels.length > 0) {
+					for (const channelId of archivedChannels) {
+						try {
+							const success = await discordBot.deleteOrphanedChannel(channelId);
+							if (success) {
+								deletedChannels++;
+								consola.info(`📺 Deleted archived Discord channel ${channelId}`);
+							}
+						}
+						catch (error: unknown) {
+							consola.warn(`Failed to delete archived channel ${channelId}: ${error instanceof Error ? error.message : String(error)}`);
 						}
 					}
 				}
@@ -283,7 +304,7 @@ export const cleanCommand = define({
 			consola.info(`  • Killed ${killedSessions} tmux sessions`);
 			consola.info(`  • Archived ${archivedCount} log files`);
 			if (discordBot) {
-				consola.info(`  • Archived ${archivedChannels} Discord channels`);
+				consola.info(`  • Deleted ${deletedChannels} Discord channels`);
 				await discordBot.shutdown();
 			}
 		}
@@ -320,7 +341,7 @@ if (import.meta.vitest) {
 				start: vi.fn(),
 				findOrphanedChannels: vi.fn(),
 				cleanupSessionChannel: vi.fn(),
-				archiveOrphanedChannel: vi.fn(),
+				deleteOrphanedChannel: vi.fn(),
 				shutdown: vi.fn(),
 			};
 
@@ -359,7 +380,7 @@ if (import.meta.vitest) {
 			// Mock orphaned channels found
 			const orphanedChannelIds = ['channel-orphan-1', 'channel-orphan-2'];
 			mockDiscordBot.findOrphanedChannels.mockResolvedValue(orphanedChannelIds);
-			mockDiscordBot.archiveOrphanedChannel.mockResolvedValue(true);
+			mockDiscordBot.deleteOrphanedChannel.mockResolvedValue(true);
 
 			// Mock the logic that would be called in the clean function
 			const _cleanupSessions = sessions.filter(session =>
@@ -415,7 +436,7 @@ if (import.meta.vitest) {
 			const orphanedChannelIds = ['channel-orphan-1'];
 			mockDiscordBot.findOrphanedChannels.mockResolvedValue(orphanedChannelIds);
 			mockDiscordBot.cleanupSessionChannel.mockResolvedValue(true);
-			mockDiscordBot.archiveOrphanedChannel.mockResolvedValue(true);
+			mockDiscordBot.deleteOrphanedChannel.mockResolvedValue(true);
 
 			// Simulate cleanup logic
 			const cleanupSessions = sessions.filter(session => session.status === 'ended');
@@ -435,11 +456,11 @@ if (import.meta.vitest) {
 			const foundOrphanedChannels = await mockDiscordBot.findOrphanedChannels(activeSessions);
 			expect(foundOrphanedChannels).toEqual(orphanedChannelIds);
 
-			// Would archive the orphaned channels
+			// Would delete the orphaned channels
 			for (const channelId of foundOrphanedChannels) {
-				await mockDiscordBot.archiveOrphanedChannel(channelId);
+				await mockDiscordBot.deleteOrphanedChannel(channelId);
 			}
-			expect(mockDiscordBot.archiveOrphanedChannel).toHaveBeenCalledWith('channel-orphan-1');
+			expect(mockDiscordBot.deleteOrphanedChannel).toHaveBeenCalledWith('channel-orphan-1');
 		});
 
 		it('should not proceed if no sessions and no orphaned channels need cleanup', async () => {

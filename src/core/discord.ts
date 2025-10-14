@@ -453,6 +453,51 @@ export class DiscordBot {
 		this.channelSessionMap.set(channelId, sessionId);
 	}
 
+	/**
+	 * Delete a Discord channel and send a final message before deletion
+	 */
+	private async deleteChannel(channelId: string, finalMessage: string, deleteReason: string): Promise<void> {
+		const channel = await this.client.channels.fetch(channelId) as TextChannel;
+		if (!channel || channel.type !== ChannelType.GuildText) {
+			return;
+		}
+
+		const guild = channel.guild;
+		const botMember = guild.members.me;
+
+		// Ensure bot has access to the channel before trying to send a message
+		if (botMember) {
+			try {
+				await channel.permissionOverwrites.edit(botMember, {
+					ViewChannel: true,
+					SendMessages: true,
+					ReadMessageHistory: true,
+				});
+			}
+			catch (permError) {
+				console.warn(`Failed to ensure bot permissions for channel ${channelId}:`, permError);
+				// Continue anyway - we might still be able to delete without sending a message
+			}
+		}
+
+		// Try to send a final message before deletion (but don't fail if we can't)
+		await safeDiscordOperation(
+			async () => {
+				await channel.send(finalMessage);
+			},
+			'send deletion notification',
+			{ warn: console.warn, debug: console.info },
+			{
+				maxRetries: 1,
+				baseDelayMs: 1000,
+			},
+		);
+
+		// Wait briefly for the message to be sent, then delete the channel
+		await new Promise(resolve => setTimeout(resolve, 2000));
+		await channel.delete(deleteReason);
+	}
+
 	async cleanupSessionChannel(sessionId: string): Promise<void> {
 		const channelId = this.sessionChannelMap.get(sessionId);
 		if (!channelId) {
@@ -460,75 +505,11 @@ export class DiscordBot {
 		}
 
 		try {
-			const channel = await this.client.channels.fetch(channelId) as TextChannel;
-			if (channel && channel.type === ChannelType.GuildText) {
-				const guild = channel.guild;
-				const botMember = guild.members.me;
-
-				// Ensure bot has access to the channel before trying to send a message
-				if (botMember) {
-					try {
-						await channel.permissionOverwrites.edit(botMember, {
-							ViewChannel: true,
-							SendMessages: true,
-							ReadMessageHistory: true,
-						});
-					}
-					catch (permError) {
-						console.warn(`Failed to ensure bot permissions for channel ${channelId}:`, permError);
-						// Continue anyway - we might still be able to archive without sending a message
-					}
-				}
-
-				// Try to send a final message before cleanup (but don't fail if we can't)
-				await safeDiscordOperation(
-					async () => {
-						await channel.send(`🏁 Session ${sessionId} ended. This channel will be archived and hidden from the server list.`);
-					},
-					'send cleanup notification',
-					{ warn: console.warn, debug: console.info },
-					{
-						maxRetries: 1,
-						baseDelayMs: 1000,
-					},
-				);
-
-				// Archive the channel by renaming it and removing ALL view permissions
-				const archivedName = `_archived-${channel.name}`;
-				await channel.setName(archivedName);
-
-				// Hide channel from everyone (including authorized users)
-				// This removes it from the server's channel list
-
-				// Remove view permissions for @everyone
-				await channel.permissionOverwrites.edit(guild.roles.everyone, {
-					ViewChannel: false,
-				});
-
-				// Remove view permissions for all authorized users
-				for (const userId of this.authorizedUsers) {
-					try {
-						const user = await this.client.users.fetch(userId);
-						await channel.permissionOverwrites.edit(user, {
-							ViewChannel: false,
-							ReadMessageHistory: false,
-							SendMessages: false,
-						});
-					}
-					catch (error) {
-						console.warn(`Failed to update permissions for user ${userId} during cleanup:`, error);
-					}
-				}
-
-				// Keep bot access for potential history retrieval
-				if (botMember) {
-					await channel.permissionOverwrites.edit(botMember, {
-						ViewChannel: true,
-						ReadMessageHistory: true,
-						SendMessages: false,
-					});
-				}
-			}
+			await this.deleteChannel(
+				channelId,
+				`🏁 Session ${sessionId} ended. This channel will be deleted.`,
+				'Session ended - cleaning up channel',
+			);
 		}
 		catch (error) {
 			console.error(`Error cleaning up channel for session ${sessionId}:`, error);
@@ -711,78 +692,44 @@ export class DiscordBot {
 	}
 
 	/**
-	 * Archive an orphaned channel by ID
+	 * Find archived channels from previous runs (channels starting with _archived-)
 	 */
-	async archiveOrphanedChannel(channelId: string): Promise<boolean> {
+	async findArchivedChannels(): Promise<string[]> {
 		try {
-			const channel = await this.client.channels.fetch(channelId) as TextChannel;
-			if (!channel || channel.type !== ChannelType.GuildText) {
-				return false;
+			if (!this.client.guilds.cache.size) {
+				return [];
 			}
 
-			const guild = channel.guild;
-			const botMember = guild.members.me;
-
-			// Ensure bot has access to the channel before trying to send a message
-			if (botMember) {
-				try {
-					await channel.permissionOverwrites.edit(botMember, {
-						ViewChannel: true,
-						SendMessages: true,
-						ReadMessageHistory: true,
-					});
-				}
-				catch (permError) {
-					console.warn(`Failed to ensure bot permissions for channel ${channelId}:`, permError);
-					// Continue anyway - we might still be able to archive without sending a message
-				}
+			const guild = this.client.guilds.cache.first();
+			if (!guild) {
+				return [];
 			}
 
-			// Try to send a final message before archiving (but don't fail if we can't)
-			await safeDiscordOperation(
-				async () => {
-					await channel.send(`🏁 Orphaned channel detected during cleanup. This channel will be archived and hidden from the server list as it's no longer connected to an active session.`);
-				},
-				'send archive notification',
-				{ warn: console.warn, debug: console.info },
-				{
-					maxRetries: 1,
-					baseDelayMs: 1000,
-				},
+			const archivedChannels = guild.channels.cache
+				.filter(channel =>
+					channel.name.startsWith('_archived-')
+					&& channel.type === ChannelType.GuildText,
+				)
+				.map(channel => channel.id);
+
+			return Array.from(archivedChannels);
+		}
+		catch (error) {
+			console.warn('[DISCORD] Error finding archived channels:', error);
+			return [];
+		}
+	}
+
+	/**
+	 * Delete an orphaned channel by ID
+	 */
+	async deleteOrphanedChannel(channelId: string): Promise<boolean> {
+		try {
+			await this.deleteChannel(
+				channelId,
+				'🏁 Orphaned channel detected during cleanup. This channel will be deleted.',
+				'Orphaned channel cleanup',
 			);
-
-			// Archive the channel by renaming it and removing ALL view permissions
-			const archivedName = `_archived-${channel.name}`;
-			await channel.setName(archivedName);
-
-			// Remove view permissions for @everyone
-			await channel.permissionOverwrites.edit(guild.roles.everyone, {
-				ViewChannel: false,
-			});
-
-			// Remove view permissions for all authorized users
-			for (const userId of this.authorizedUsers) {
-				try {
-					const user = await this.client.users.fetch(userId);
-					await channel.permissionOverwrites.edit(user, {
-						ViewChannel: false,
-						ReadMessageHistory: false,
-						SendMessages: false,
-					});
-				}
-				catch (error) {
-					console.warn(`Failed to update permissions for user ${userId} during orphaned cleanup:`, error);
-				}
-			}
-
-			// Keep bot access for potential history retrieval
-			if (botMember) {
-				await channel.permissionOverwrites.edit(botMember, {
-					ViewChannel: true,
-					ReadMessageHistory: true,
-					SendMessages: false,
-				});
-			}
 
 			// Clean up our internal mappings
 			this.channelSessionMap.delete(channelId);
@@ -794,11 +741,11 @@ export class DiscordBot {
 				}
 			}
 
-			console.info(`[DISCORD] Archived orphaned channel: ${archivedName}`);
+			console.info(`[DISCORD] Deleted orphaned channel`);
 			return true;
 		}
 		catch (error) {
-			console.warn(`[DISCORD] Failed to archive orphaned channel ${channelId}:`, error);
+			console.warn(`[DISCORD] Failed to delete orphaned channel ${channelId}:`, error);
 			return false;
 		}
 	}
