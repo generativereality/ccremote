@@ -291,10 +291,7 @@ export class DiscordBot {
 		}
 
 		// Check if a channel with this session name already exists in the guild
-		// Include project name prefix (like log files do)
-		const path = await import('node:path');
-		const projectName = path.basename(process.cwd());
-		const channelName = `${projectName}-${sessionName}`.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+		const channelName = await this.generateChannelName(sessionName);
 		console.info(`[DISCORD] Checking for existing channel with name: ${channelName}`);
 
 		try {
@@ -451,6 +448,16 @@ export class DiscordBot {
 	async assignChannelToSession(sessionId: string, channelId: string): Promise<void> {
 		this.sessionChannelMap.set(sessionId, channelId);
 		this.channelSessionMap.set(channelId, sessionId);
+	}
+
+	/**
+	 * Generate a Discord channel name for a session
+	 * Matches Discord's naming rules: lowercase, alphanumeric + hyphens only
+	 */
+	private async generateChannelName(sessionName: string): Promise<string> {
+		const path = await import('node:path');
+		const projectName = path.basename(process.cwd());
+		return `${projectName}-${sessionName}`.toLowerCase().replace(/[^a-z0-9-]/g, '-');
 	}
 
 	/**
@@ -651,6 +658,13 @@ export class DiscordBot {
 				return [];
 			}
 
+			// Construct expected channel names for all active sessions
+			const expectedChannelNames = new Set(
+				await Promise.all(
+					activeSessions.map(async session => this.generateChannelName(session.name)),
+				),
+			);
+
 			// Get all ccremote channels but exclude archived ones
 			// Note: With project prefixes, channels are named like "projectname-sessionname"
 			// We filter out archived channels which start with "_archived-"
@@ -663,23 +677,18 @@ export class DiscordBot {
 				// Check if this channel is mapped to any active session in our bot's memory
 				const mappedSessionId = this.channelSessionMap.get(channelId);
 
-				// Extract session name from channel name (e.g., "ccremote-ccremote-7" -> "ccremote-7")
-				const channelName = channel.name;
-				const sessionNameFromChannel = channelName.replace(/^ccremote-/, '');
-
 				// Check if this channel corresponds to any active session
 				const activeSessionIds = activeSessions.map(s => s.id);
-				const activeSessionNames = activeSessions.map(s => s.name);
 
 				// Channel is orphaned if:
-				// 1. Not mapped in bot memory AND doesn't match any active session name, OR
+				// 1. Not mapped in bot memory AND doesn't match any expected channel name, OR
 				// 2. Mapped to a session that's not in active sessions
-				const isOrphaned = (!mappedSessionId && !activeSessionNames.includes(sessionNameFromChannel))
+				const isOrphaned = (!mappedSessionId && !expectedChannelNames.has(channel.name))
 					|| (mappedSessionId && !activeSessionIds.includes(mappedSessionId));
 
 				if (isOrphaned) {
 					orphanedChannels.push(channelId);
-					console.info(`[DISCORD] Found orphaned channel: ${channel.name} (${channelId}) - mapped to: ${mappedSessionId || 'none'}, session name from channel: ${sessionNameFromChannel}, active session names: [${activeSessionNames.join(', ')}]`);
+					console.info(`[DISCORD] Found orphaned channel: ${channel.name} (${channelId}) - mapped to: ${mappedSessionId || 'none'}, expected names: [${Array.from(expectedChannelNames).join(', ')}]`);
 				}
 			}
 
