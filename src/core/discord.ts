@@ -457,8 +457,36 @@ export class DiscordBot {
 		try {
 			const channel = await this.client.channels.fetch(channelId) as TextChannel;
 			if (channel && channel.type === ChannelType.GuildText) {
-				// Send a final message before cleanup
-				await channel.send(`🏁 Session ${sessionId} ended. This channel will be archived and hidden from the server list.`);
+				const guild = channel.guild;
+				const botMember = guild.members.me;
+
+				// Ensure bot has access to the channel before trying to send a message
+				if (botMember) {
+					try {
+						await channel.permissionOverwrites.edit(botMember, {
+							ViewChannel: true,
+							SendMessages: true,
+							ReadMessageHistory: true,
+						});
+					}
+					catch (permError) {
+						console.warn(`Failed to ensure bot permissions for channel ${channelId}:`, permError);
+						// Continue anyway - we might still be able to archive without sending a message
+					}
+				}
+
+				// Try to send a final message before cleanup (but don't fail if we can't)
+				await safeDiscordOperation(
+					async () => {
+						await channel.send(`🏁 Session ${sessionId} ended. This channel will be archived and hidden from the server list.`);
+					},
+					'send cleanup notification',
+					{ warn: console.warn, debug: console.info },
+					{
+						maxRetries: 1,
+						baseDelayMs: 1000,
+					},
+				);
 
 				// Archive the channel by renaming it and removing ALL view permissions
 				const archivedName = `archived-${channel.name}`;
@@ -466,7 +494,6 @@ export class DiscordBot {
 
 				// Hide channel from everyone (including authorized users)
 				// This removes it from the server's channel list
-				const guild = channel.guild;
 
 				// Remove view permissions for @everyone
 				await channel.permissionOverwrites.edit(guild.roles.everyone, {
@@ -489,7 +516,6 @@ export class DiscordBot {
 				}
 
 				// Keep bot access for potential history retrieval
-				const botMember = guild.members.me;
 				if (botMember) {
 					await channel.permissionOverwrites.edit(botMember, {
 						ViewChannel: true,
@@ -688,14 +714,40 @@ export class DiscordBot {
 				return false;
 			}
 
-			// Send a final message before archiving
-			await channel.send(`🏁 Orphaned channel detected during cleanup. This channel will be archived and hidden from the server list as it's no longer connected to an active session.`);
+			const guild = channel.guild;
+			const botMember = guild.members.me;
+
+			// Ensure bot has access to the channel before trying to send a message
+			if (botMember) {
+				try {
+					await channel.permissionOverwrites.edit(botMember, {
+						ViewChannel: true,
+						SendMessages: true,
+						ReadMessageHistory: true,
+					});
+				}
+				catch (permError) {
+					console.warn(`Failed to ensure bot permissions for channel ${channelId}:`, permError);
+					// Continue anyway - we might still be able to archive without sending a message
+				}
+			}
+
+			// Try to send a final message before archiving (but don't fail if we can't)
+			await safeDiscordOperation(
+				async () => {
+					await channel.send(`🏁 Orphaned channel detected during cleanup. This channel will be archived and hidden from the server list as it's no longer connected to an active session.`);
+				},
+				'send archive notification',
+				{ warn: console.warn, debug: console.info },
+				{
+					maxRetries: 1,
+					baseDelayMs: 1000,
+				},
+			);
 
 			// Archive the channel by renaming it and removing ALL view permissions
 			const archivedName = `archived-${channel.name}`;
 			await channel.setName(archivedName);
-
-			const guild = channel.guild;
 
 			// Remove view permissions for @everyone
 			await channel.permissionOverwrites.edit(guild.roles.everyone, {
@@ -718,7 +770,6 @@ export class DiscordBot {
 			}
 
 			// Keep bot access for potential history retrieval
-			const botMember = guild.members.me;
 			if (botMember) {
 				await channel.permissionOverwrites.edit(botMember, {
 					ViewChannel: true,
