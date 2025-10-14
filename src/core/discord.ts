@@ -644,6 +644,9 @@ export class DiscordBot {
 
 	/**
 	 * Find orphaned ccremote channels that exist but aren't connected to any active session
+	 *
+	 * IMPORTANT: Only examines channels belonging to the current project to avoid
+	 * cross-project interference when multiple projects share the same Discord guild.
 	 */
 	async findOrphanedChannels(activeSessions: { id: string; name: string }[]): Promise<string[]> {
 		try {
@@ -658,6 +661,11 @@ export class DiscordBot {
 				return [];
 			}
 
+			// Get current project name to identify which channels belong to this project
+			const path = await import('node:path');
+			const projectName = path.basename(process.cwd()).toLowerCase().replace(/[^a-z0-9-]/g, '-');
+			const projectPrefix = `${projectName}-`;
+
 			// Construct expected channel names for all active sessions
 			const expectedChannelNames = new Set(
 				await Promise.all(
@@ -665,15 +673,17 @@ export class DiscordBot {
 				),
 			);
 
-			// Get all ccremote channels but exclude archived ones
-			// Note: With project prefixes, channels are named like "projectname-sessionname"
-			// We filter out archived channels which start with "_archived-"
-			const ccremoteChannels = guild.channels.cache.filter(channel =>
-				!channel.name.startsWith('_archived-')
+			// Only examine channels that belong to THIS project (match the project prefix)
+			// This prevents cross-project interference when multiple projects share the same guild
+			const projectChannels = guild.channels.cache.filter(channel =>
+				channel.name.startsWith(projectPrefix)
+				&& !channel.name.startsWith('_archived-')
 				&& channel.type === ChannelType.GuildText,
 			);
 
-			for (const [channelId, channel] of ccremoteChannels) {
+			console.info(`[DISCORD] Checking ${projectChannels.size} channels with prefix '${projectPrefix}' for orphans`);
+
+			for (const [channelId, channel] of projectChannels) {
 				// Check if this channel is mapped to any active session in our bot's memory
 				const mappedSessionId = this.channelSessionMap.get(channelId);
 
