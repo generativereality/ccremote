@@ -462,47 +462,54 @@ export class DiscordBot {
 
 	/**
 	 * Delete a Discord channel and send a final message before deletion
+	 * Returns true if deletion succeeded, false if bot lacks permissions
 	 */
-	private async deleteChannel(channelId: string, finalMessage: string, deleteReason: string): Promise<void> {
-		const channel = await this.client.channels.fetch(channelId) as TextChannel;
-		if (!channel || channel.type !== ChannelType.GuildText) {
-			return;
-		}
-
-		const guild = channel.guild;
-		const botMember = guild.members.me;
-
-		// Ensure bot has access to the channel before trying to send a message
-		if (botMember) {
-			try {
-				await channel.permissionOverwrites.edit(botMember, {
-					ViewChannel: true,
-					SendMessages: true,
-					ReadMessageHistory: true,
-				});
+	private async deleteChannel(channelId: string, finalMessage: string, deleteReason: string): Promise<boolean> {
+		try {
+			const channel = await this.client.channels.fetch(channelId) as TextChannel;
+			if (!channel || channel.type !== ChannelType.GuildText) {
+				return false;
 			}
-			catch (permError) {
-				console.warn(`Failed to ensure bot permissions for channel ${channelId}:`, permError);
-				// Continue anyway - we might still be able to delete without sending a message
+
+			const guild = channel.guild;
+			const botMember = guild.members.me;
+
+			// Check if bot has permissions to manage this channel before attempting anything
+			if (botMember) {
+				const botPermissions = channel.permissionsFor(botMember);
+				if (!botPermissions?.has(PermissionFlagsBits.ManageChannels)) {
+					console.warn(`[DISCORD] Bot lacks ManageChannels permission for channel ${channelId} (${channel.name}) - skipping`);
+					return false;
+				}
 			}
+
+			// Try to send a final message before deletion (but don't fail if we can't)
+			await safeDiscordOperation(
+				async () => {
+					await channel.send(finalMessage);
+				},
+				'send deletion notification',
+				{ warn: console.warn, debug: console.info },
+				{
+					maxRetries: 1,
+					baseDelayMs: 1000,
+				},
+			);
+
+			// Wait briefly for the message to be sent, then delete the channel
+			await new Promise(resolve => setTimeout(resolve, 2000));
+			await channel.delete(deleteReason);
+			return true;
 		}
-
-		// Try to send a final message before deletion (but don't fail if we can't)
-		await safeDiscordOperation(
-			async () => {
-				await channel.send(finalMessage);
-			},
-			'send deletion notification',
-			{ warn: console.warn, debug: console.info },
-			{
-				maxRetries: 1,
-				baseDelayMs: 1000,
-			},
-		);
-
-		// Wait briefly for the message to be sent, then delete the channel
-		await new Promise(resolve => setTimeout(resolve, 2000));
-		await channel.delete(deleteReason);
+		catch (error: any) {
+			// Check if this is a permissions error
+			if (error?.code === 50001 || error?.message?.includes('Missing Access')) {
+				console.warn(`[DISCORD] Missing permissions to delete channel ${channelId} - skipping`);
+				return false;
+			}
+			// Re-throw other errors
+			throw error;
+		}
 	}
 
 	async cleanupSessionChannel(sessionId: string): Promise<void> {
@@ -744,24 +751,27 @@ export class DiscordBot {
 	 */
 	async deleteOrphanedChannel(channelId: string): Promise<boolean> {
 		try {
-			await this.deleteChannel(
+			const deleted = await this.deleteChannel(
 				channelId,
 				'🏁 Orphaned channel detected during cleanup. This channel will be deleted.',
 				'Orphaned channel cleanup',
 			);
 
-			// Clean up our internal mappings
-			this.channelSessionMap.delete(channelId);
-			// Find and remove any sessionId mappings that point to this channel
-			for (const [sessionId, mappedChannelId] of this.sessionChannelMap.entries()) {
-				if (mappedChannelId === channelId) {
-					this.sessionChannelMap.delete(sessionId);
-					break;
+			if (deleted) {
+				// Clean up our internal mappings
+				this.channelSessionMap.delete(channelId);
+				// Find and remove any sessionId mappings that point to this channel
+				for (const [sessionId, mappedChannelId] of this.sessionChannelMap.entries()) {
+					if (mappedChannelId === channelId) {
+						this.sessionChannelMap.delete(sessionId);
+						break;
+					}
 				}
+
+				console.info(`[DISCORD] Deleted orphaned channel ${channelId}`);
 			}
 
-			console.info(`[DISCORD] Deleted orphaned channel`);
-			return true;
+			return deleted;
 		}
 		catch (error) {
 			console.warn(`[DISCORD] Failed to delete orphaned channel ${channelId}:`, error);

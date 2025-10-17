@@ -225,6 +225,7 @@ export const cleanCommand = define({
 
 			// Delete Discord channels for ended sessions
 			let deletedChannels = 0;
+			let skippedChannels = 0;
 			if (discordBot) {
 				// Delete channels for sessions being cleaned up
 				for (const session of cleanupSessions) {
@@ -247,6 +248,10 @@ export const cleanCommand = define({
 								deletedChannels++;
 								consola.info(`📺 Deleted orphaned Discord channel ${channelId}`);
 							}
+							else {
+								skippedChannels++;
+								consola.info(`⏭️  Skipped orphaned channel ${channelId} (insufficient permissions)`);
+							}
 						}
 						catch (error: unknown) {
 							consola.warn(`Failed to delete orphaned channel ${channelId}: ${error instanceof Error ? error.message : String(error)}`);
@@ -262,6 +267,10 @@ export const cleanCommand = define({
 							if (success) {
 								deletedChannels++;
 								consola.info(`📺 Deleted archived Discord channel ${channelId}`);
+							}
+							else {
+								skippedChannels++;
+								consola.info(`⏭️  Skipped archived channel ${channelId} (insufficient permissions)`);
 							}
 						}
 						catch (error: unknown) {
@@ -305,6 +314,9 @@ export const cleanCommand = define({
 			consola.info(`  • Archived ${archivedCount} log files`);
 			if (discordBot) {
 				consola.info(`  • Deleted ${deletedChannels} Discord channels`);
+				if (skippedChannels > 0) {
+					consola.info(`  • Skipped ${skippedChannels} channels (insufficient permissions)`);
+				}
 				await discordBot.shutdown();
 			}
 		}
