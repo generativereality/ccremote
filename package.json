@@ -21,7 +21,19 @@
     "remote"
   ],
   "exports": {
-    ".": "./dist/index.js"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./md-queue": {
+      "types": "./src/md-queue/index.ts",
+      "default": "./src/md-queue/index.ts"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "md-queue": ["./src/md-queue/index.ts"]
+    }
   },
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -33,7 +45,7 @@
     "dist"
   ],
   "engines": {
-    "node": ">=20.19.4"
+    "node": ">=18.0.0"
   },
   "scripts": {
     "build": "tsdown",
