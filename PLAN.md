@@ -125,6 +125,7 @@ Daily quota window alignment with early dummy commands.
 ### v0.3.0 - Queue Watcher & Project Automation
 **Target: Q1 2026**
 **Priority: High**
+**Status: md-queue library complete ✅ | Integration in progress**
 
 ### Queue-Based Session Orchestration
 
@@ -132,10 +133,49 @@ Transform ccremote into a generic queue watcher that automatically spawns Claude
 
 **Use Case:** Any project that needs automated async Claude processing based on a simple queue system.
 
-#### Core Features
+#### md-queue Library ✅ IMPLEMENTED
+**Status: Complete and ready for integration**
+
+A markdown-based queue system with YAML frontmatter for state persistence. Works with both Bun and Node.
+
+**Location:** `src/md-queue/`
+
+**Key Features:**
+- **State machine:** `pending → processing → done/error` with reprocessing support
+- **Soft locks:** `host:pid:timestamp` format with stale detection (5min timeout)
+- **Atomic writes:** `.tmp` → rename pattern for sync safety
+- **Reconciliation:** Directory sweeps to find pending/stale items
+- **Concurrency control:** Configurable parallel processing
+- **Reprocessing:** Track `previous_attempts[]` with reasons
+
+**Core Classes:**
+- `AssetManager` - File operations with atomic writes
+- `LockManager` - Soft lock coordination across workers
+- `StateManager` - State machine transitions
+- `Reconciler` - Directory sweeps and reconciliation
+- `Processor` - Claim → Execute → Update workflow
+
+**API:**
+```typescript
+import { createQueue } from './md-queue';
+
+const queue = createQueue({
+  basePath: '/path/to/project',
+  lockTimeout: 5 * 60 * 1000,
+  maxRetries: 3
+});
+
+// Find and process pending items
+const pending = await queue.reconciler.findPending('_q/high');
+await queue.processor.processItem(item, async (item) => {
+  // Spawn Claude session, etc.
+});
+```
+
+#### Queue Watcher Features (To Be Integrated)
 
 **1. Queue Folder Monitoring**
-- Watch `_q/high/`, `_q/medium/`, `_q/low/` folders in project directory (CWD)
+- Watch `_q/high/`, `_q/medium/`, `_q/low/` folders using md-queue reconciler
 - Support both files (.md) and folders (for multi-file items like transaction exports)
 - Priority-based processing schedules:
   - High: Every 10 seconds
@@ -143,19 +183,21 @@ Transform ccremote into a generic queue watcher that automatically spawns Claude
   - Low: Every 15 minutes
 
 **2. Automatic Session Spawning**
+- Use md-queue processor to claim and process items
 - Spawn Claude Code sessions with custom prompts describing queue contents
 - Use `--permission-mode acceptEdits` flag
 - Session naming: `q-{priority}-{timestamp}`
 - Discord integration for session tracking
 
 **3. HTTP API (Fastify)**
-- `POST /queue` - Create queue items (for Custom GPTs, webhooks)
-- `GET /queue/status` - Get item counts per priority
-- `GET /queue/items/:priority` - List items in priority folder
+- `POST /queue` - Create queue items using md-queue AssetManager
+- `GET /queue/status` - Get item counts via md-queue reconciler
+- `GET /queue/items/:priority` - List items using md-queue filters
 - Bearer token authentication via env var
 - Customizable port (default: 3000)
 
 **4. Queue Monitoring**
+- Use md-queue reconciler for stale lock detection
 - Session timeout detection (default: 10 minutes)
 - High-priority backlog alerts (>10 items)
 - Discord notifications for queue status
@@ -179,21 +221,27 @@ ccremote monitor
 #### Implementation Details
 
 **New Files:**
-- `src/managers/QueueManager.ts` - Queue watcher logic
+- `src/managers/QueueManager.ts` - Queue watcher using md-queue reconciler/processor
 - `src/managers/QueueMonitor.ts` - Backlog & timeout monitoring
-- `src/api/server.ts` - Fastify HTTP API
+- `src/api/server.ts` - Fastify HTTP API using md-queue AssetManager
 - `src/commands/watch.ts` - Watch command
 - `src/commands/queue.ts` - Queue status/process commands
 - `src/commands/monitor.ts` - Monitoring command
+
+**Existing Infrastructure (md-queue):**
+- `src/md-queue/` - Complete queue library (AssetManager, LockManager, StateManager, Reconciler, Processor)
+- Ready for integration with queue watcher
 
 **Key Principles:**
 - Works with any project that has `_q/` folder structure
 - Claude discovers CLAUDE.md naturally (no --prompt-file flag)
 - Custom prompts describe queue contents dynamically
 - CWD-based operation (no configuration needed for project path)
+- md-queue handles all state persistence and coordination
 
 **Integration Points:**
 - Extends existing SessionManager for spawning
+- Uses md-queue for all queue operations (find, claim, process)
 - Uses existing Discord bot for notifications
 - Builds on current tmux integration
 - Compatible with quota scheduling system
@@ -228,11 +276,20 @@ Claude processes, moves to `_q/archive/{priority}/`, updates project files.
 ---
 
 **Dependencies:**
-- Fastify (HTTP server)
-- yaml (for frontmatter parsing)
+- ✅ yaml v2.8.1 (installed - for frontmatter parsing)
+- ✅ md-queue library (implemented - core queue infrastructure)
+- Fastify (HTTP server) - to be added
 - Existing ccremote infrastructure
 
-**Estimated Effort:** 2-3 weeks
+**Estimated Effort:**
+- ✅ md-queue library: Complete (~1 week)
+- Remaining: 1-2 weeks for queue watcher integration
+
+**Progress:**
+- ✅ md-queue library implemented and typechecking
+- ⏳ QueueManager integration pending
+- ⏳ HTTP API pending
+- ⏳ Discord integration pending
 
 **Success Criteria:**
 - Queue watcher runs reliably in background
@@ -240,6 +297,7 @@ Claude processes, moves to `_q/archive/{priority}/`, updates project files.
 - HTTP API accepts external queue items
 - Discord shows queue processing status
 - Works with multiple concurrent projects
+- md-queue handles all state management correctly
 
 ---
 
