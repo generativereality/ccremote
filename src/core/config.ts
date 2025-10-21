@@ -9,6 +9,7 @@ export type CCRemoteConfig = {
 	monitoringInterval: number;
 	maxRetries: number;
 	autoRestart: boolean;
+	discordHealthCheckInterval: number;
 };
 
 /**
@@ -36,6 +37,7 @@ export function loadConfig(): CCRemoteConfig {
 	const monitoringInterval = Number.parseInt(getEnvVar('CCREMOTE_MONITORING_INTERVAL') || '2000', 10);
 	const maxRetries = Number.parseInt(getEnvVar('CCREMOTE_MAX_RETRIES') || '3', 10);
 	const autoRestart = getEnvVar('CCREMOTE_AUTO_RESTART') !== 'false';
+	const discordHealthCheckInterval = Number.parseInt(getEnvVar('CCREMOTE_DISCORD_HEALTH_CHECK_INTERVAL') || '3600000', 10); // 1 hour default
 
 	// Validate required fields
 	if (!discordBotToken) {
@@ -52,6 +54,7 @@ export function loadConfig(): CCRemoteConfig {
 		monitoringInterval,
 		maxRetries,
 		autoRestart,
+		discordHealthCheckInterval,
 	};
 }
 
@@ -119,9 +122,10 @@ CCREMOTE_DISCORD_OWNER_ID=your_discord_user_id_here
 CCREMOTE_DISCORD_AUTHORIZED_USERS=user_id_1,user_id_2
 
 # Optional: Monitoring Configuration
-CCREMOTE_MONITORING_INTERVAL=2000    # Polling interval in milliseconds (default: 2000)
-CCREMOTE_MAX_RETRIES=3               # Max retry attempts on error (default: 3)
-CCREMOTE_AUTO_RESTART=true           # Auto-restart monitoring on failure (default: true)
+CCREMOTE_MONITORING_INTERVAL=2000             # Polling interval in milliseconds (default: 2000)
+CCREMOTE_MAX_RETRIES=3                        # Max retry attempts on error (default: 3)
+CCREMOTE_AUTO_RESTART=true                    # Auto-restart monitoring on failure (default: true)
+CCREMOTE_DISCORD_HEALTH_CHECK_INTERVAL=3600000 # Discord health check interval in ms (default: 3600000 = 1 hour)
 `;
 }
 

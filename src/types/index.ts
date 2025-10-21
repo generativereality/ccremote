@@ -38,7 +38,7 @@ export type MonitorState = {
 };
 
 export type NotificationMessage = {
-	type: 'limit' | 'continued' | 'approval' | 'error' | 'session_ended';
+	type: 'limit' | 'continued' | 'approval' | 'error' | 'session_ended' | 'task_completed';
 	sessionId: string;
 	sessionName: string;
 	message: string;
@@ -53,6 +53,8 @@ export type NotificationMessage = {
 		timestamp?: string;
 		nextScheduledExecution?: string;
 		quotaWindowTime?: string;
+		idleDurationSeconds?: number;
+		lastOutputTimestamp?: string;
 	};
 };
 

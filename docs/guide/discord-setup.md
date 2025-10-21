@@ -38,7 +38,7 @@ This will guide you through the entire process step-by-step. If you prefer manua
 2. Click "Add Bot" 
 3. Click "Yes, do it!" to confirm
 4. **Important**: Under "Privileged Gateway Intents", enable this intent:
-   - ✅ **MESSAGE CONTENT INTENT** - Required for bot to read approval commands like "approve" and "deny"
+   - ✅ **MESSAGE CONTENT INTENT** - Required for bot to read Discord commands and approval responses
 
 ### Step 3: Get Bot Token
 
@@ -96,12 +96,20 @@ Before using ccremote, test that your bot can reach you:
 ccremote bots need these specific permissions and intents to operate:
 
 ### Gateway Intents (in Bot section)
-- **MESSAGE CONTENT INTENT**: Required for bot to read approval commands like "approve" and "deny" (used in discord.ts:60)
+- **MESSAGE CONTENT INTENT**: Required for bot to read Discord commands and approval responses
 
 ### Bot Permissions (when inviting)
-- **Send Messages**: Required to send notifications and replies (used in discord.ts:111, 156, 71, 75, 83, 178)
 
-**Important**: Only these permissions are required - ccremote doesn't use any other Discord features.
+**Recommended (easiest setup):**
+- **Administrator**: Bypasses role hierarchy issues and ensures the bot can manage all channels without permission conflicts
+
+**OR Minimal permissions:**
+- **Manage Channels**: Create and rename session channels
+- **Manage Roles**: Edit channel permission overwrites to hide archived channels from the server list
+- **Send Messages**: Send notifications and replies
+- **Read Message History**: Read user approval responses
+
+**Important**: If you use minimal permissions and the bot cannot access a channel due to role hierarchy, it will gracefully handle the error and continue with archival. However, Administrator permission is recommended to avoid any permission-related issues.
 
 ## Privacy Models
 
@@ -205,8 +213,8 @@ Error: Process exited with code 1
 - **Revoke unused tokens**: Delete bots you're not using
 
 ### Bot Permissions
-- **Minimal permissions**: Only grant what ccremote needs
-- **No admin permissions**: Never give bots administrative access
+- **Administrator recommended**: While minimal permissions work, Administrator permission ensures reliable channel management
+- **Personal bot safety**: For personal bots in your own server, Administrator permission is safe and prevents permission issues
 - **Review permissions**: Periodically check what permissions your bots have
 
 ### Privacy

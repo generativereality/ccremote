@@ -61,12 +61,12 @@ export const initCommand = define({
 			consola.info('   - Or use an existing server where you have admin permissions');
 			consola.info('   - To invite your bot: go back to Developer Portal > OAuth2 > URL Generator');
 			consola.info('   - Select "bot" scope and these permissions:');
-			consola.info('     • Administrator (recommended - for full channel management)');
+			consola.info('     • Administrator (recommended - bypasses role hierarchy for full channel management)');
 			consola.info('     OR for minimal permissions:');
-			consola.info('       • Manage Channels (to create private session channels)');
-			consola.info('       • Manage Roles (to set channel permissions)');
-			consola.info('       • Send Messages (to send notifications)');
-			consola.info('       • Read Message History (to see approval responses)');
+			consola.info('       • Manage Channels (create/rename session channels)');
+			consola.info('       • Manage Roles (edit permission overwrites to hide archived channels)');
+			consola.info('       • Send Messages (send notifications)');
+			consola.info('       • Read Message History (read approval responses)');
 			consola.info('   - Visit the generated URL to invite your bot');
 			consola.info('   - 💡 Note: If bot lacks Manage Channels permission, it will fall back to DMs');
 			consola.info('2. (Optional) Run: ccremote setup-tmux for optimized tmux configuration');

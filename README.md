@@ -11,13 +11,19 @@
 ## Claude Code Remote
 
 1. **Approve prompts from Discord**
-   Approve Claude Code prompts (file edits, shell commands) from Discord, so sessions don’t stall when you’re away.
+   Approve Claude Code prompts (file edits, shell commands) from Discord, so sessions don't stall when you're away.
 
 2. **Continue sessions after quota resets**
    Detect when a session stops due to quota limits, wait until the 5-hour window resets, then automatically continue.
 
 3. **Align quota windows with your workday**
    Schedule an early dummy command (e.g. 5 AM) so quota windows align with your workday → effectively 3 usable windows instead of 2.
+
+4. **Get notified when tasks complete**
+   Receive Discord notifications when Claude finishes a task and is ready for new input (no more checking back every few minutes).
+
+5. **Remote session monitoring**
+   View current session output directly in Discord with the `/output` command - see what Claude is working on from anywhere.
 
 ## Quick Start
 
@@ -29,7 +35,12 @@ npm install -g ccremote
 
 # Initialize configuration interactively
 ccremote init
+
+# Keep ccremote up to date
+npm update -g ccremote
 ```
+
+> **Note**: ccremote automatically checks for updates once per day and displays a notification if a newer version is available.
 
 ### 2. Start Monitoring
 
@@ -92,14 +103,16 @@ ccremote resume --session ccremote-1     # Resume a specific session
 ccremote resume --dry-run               # Preview what would be resumed
 
 # Manage sessions
-ccremote list                            # List all sessions
-ccremote list --all                      # Include ended sessions
+ccremote list                            # List sessions for current project
+ccremote list --all                      # List sessions from all projects
 ccremote status --session ccremote-1     # Show session details
 ccremote stop --session ccremote-1       # Stop session
 ccremote stop --session ccremote-1 --force  # Force stop even if active
 
 # Maintenance commands
-ccremote clean                           # Clean up old session files
+ccremote clean                           # Clean up current project's dead sessions
+ccremote clean --all                     # Clean up dead sessions from all projects
+ccremote clean --dry-run                 # Preview what would be cleaned
 ccremote setup-tmux                      # Configure tmux settings for ccremote
 
 # Manual tmux access (if needed)
@@ -115,6 +128,7 @@ tmux list-sessions                       # List all tmux sessions
    - 🚫 Usage limit reached
    - ✅ Session automatically continued
    - ❓ Approval requests (Claude Code confirmation dialogs)
+   - ✅ Task completion notifications (when Claude is ready for new input)
    - ❌ Errors or session ended
 4. **Seamless Integration**: Works with your existing Claude Code workflow - the start command automatically attaches you to the session
 
@@ -122,6 +136,9 @@ tmux list-sessions                       # List all tmux sessions
 
 - 🔄 **Automatic Continuation**: Automatically continue your Claude Code sessions when usage limits reset
 - 💬 **Discord Integration**: Real-time notifications and approval handling via Discord DM or private channels
+- ✅ **Task Completion Notifications**: Get alerted when Claude finishes tasks and is ready for new input
+- 📺 **Remote Output Viewing**: View current session output directly in Discord with `/output` command
+- 🧹 **Smart Cleanup**: Automatic cleanup of orphaned Discord channels and session files
 - 📱 **Session Management**: Create, list, monitor, and stop multiple sessions
 - 🖥️ **Tmux Integration**: Seamless tmux session management with proper cleanup
 - 🎯 **Pattern Detection**: Intelligent detection of usage limits, errors, and continuation opportunities
@@ -176,6 +193,21 @@ CCREMOTE_AUTO_RESTART=true           # Auto-restart monitoring on failure
    - **Read Message History** (to see approval responses)
 
    💡 **Note**: If your bot lacks Manage Channels permission, ccremote will gracefully fall back to DMs
+
+### Discord Commands
+
+Once your bot is set up and sessions are running, you can interact with ccremote through Discord:
+
+**In Session Channels:**
+- **`/output`** or **`output`** - View current session output (last 50 lines, formatted in code blocks)
+- **`status`** - Show session status information
+- **`1`, `2`, `3`** - Respond to approval dialogs with numbered options
+
+**Session Channels:**
+- Each monitored session gets its own private Discord channel (e.g., `#ccremote-session-1`)
+- Channels are automatically created when sessions start
+- Only you (and other authorized users) can see these channels
+- Channels are archived when sessions end or via the `clean` command
 
 ## Requirements
 

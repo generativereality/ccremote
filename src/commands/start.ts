@@ -117,11 +117,11 @@ export const startCommand = define({
 			}
 		}
 
-		// Run safe cleanup before starting new session
+		// Run safe cleanup before starting new session (current project only)
 		consola.info('🧹 Cleaning up dead sessions...');
 		try {
 			const cleanCtx = {
-				values: { 'dry-run': false },
+				values: { 'dry-run': false, 'all': false },
 				name: 'clean',
 				description: 'Remove ended and dead sessions, archive log files',
 				locale: 'en',
@@ -130,7 +130,7 @@ export const startCommand = define({
 				args: [],
 				raw: [],
 				rawArgs: {},
-				flags: { 'dry-run': false },
+				flags: { 'dry-run': false, 'all': false },
 				params: {},
 				rest: [],
 				parent: null,
@@ -197,6 +197,7 @@ export const startCommand = define({
 				discordOwnerId: config.discordOwnerId,
 				discordAuthorizedUsers: config.discordAuthorizedUsers,
 				discordChannelId: channel,
+				discordHealthCheckInterval: config.discordHealthCheckInterval,
 				monitoringOptions: {
 					pollInterval: config.monitoringInterval,
 					maxRetries: config.maxRetries,
