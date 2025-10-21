@@ -2,7 +2,7 @@
 
 All notable changes to ccremote will be documented in this file.
 
-## [v0.2.0] - 2025-10-12
+## [v0.2.0] - 2025-10-21
 
 ### Added
 - **Task Completion Detection**: Get notifications when Claude finishes tasks and is ready for new input (10-second idle detection with 5-minute cooldown)
@@ -10,8 +10,6 @@ All notable changes to ccremote will be documented in this file.
 - **Orphaned Channel Cleanup**: Automatic cleanup of Discord channels that exist but aren't connected to any active session
 
 ### Enhanced
-- **Monitoring System**: Extended with idle detection patterns and task completion notification logic
-- **Discord Integration**: New `/output` command handler with smart formatting and message chunking capabilities
 - **Session Cleanup**: Enhanced `ccremote clean` command now also finds and archives orphaned Discord channels
 - **Pattern Detection**: Improved regex patterns for detecting when Claude is waiting for input vs actively processing
 
