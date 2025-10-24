@@ -24,50 +24,50 @@
  * ```
  */
 
+import type { Frontmatter, Lock, QueueConfig } from './types';
 // Export all types
-export * from './types';
-
-// Export managers
-export { AssetManager } from './AssetManager';
-export { LockManager } from './LockManager';
-export { StateManager } from './StateManager';
-export { Reconciler } from './Reconciler';
-export { Processor } from './Processor';
-
 // Import managers for createQueue
 import { AssetManager } from './AssetManager';
 import { LockManager } from './LockManager';
-import { StateManager } from './StateManager';
-import { Reconciler } from './Reconciler';
 import { Processor } from './Processor';
-import type { Frontmatter, Lock, QueueConfig } from './types';
+import { Reconciler } from './Reconciler';
+import { StateManager } from './StateManager';
+
+// Export managers
+export { AssetManager } from './AssetManager';
+
+export { LockManager } from './LockManager';
+export { Processor } from './Processor';
+export { Reconciler } from './Reconciler';
+export { StateManager } from './StateManager';
+export * from './types';
 
 // Re-export commonly used types for convenience
 export type {
-  QueueItem,
-  Frontmatter,
-  Status,
-  Phase,
-  Lock,
-  ModelResult,
-  ReconciliationReport,
-  ProcessReport,
-  FilterOptions,
-  ProcessOptions,
-  QueueConfig,
+	FilterOptions,
+	Frontmatter,
+	Lock,
+	ModelResult,
+	Phase,
+	ProcessOptions,
+	ProcessReport,
+	QueueConfig,
+	QueueItem,
+	ReconciliationReport,
+	Status,
 } from './types';
 
 /**
  * Queue instance with all managers
  */
-export interface Queue {
-  assetManager: AssetManager;
-  lockManager: LockManager;
-  stateManager: StateManager;
-  reconciler: Reconciler;
-  processor: Processor;
-  config: QueueConfig;
-}
+export type Queue = {
+	assetManager: AssetManager;
+	lockManager: LockManager;
+	stateManager: StateManager;
+	reconciler: Reconciler;
+	processor: Processor;
+	config: QueueConfig;
+};
 
 /**
  * Create a fully initialized queue instance
@@ -85,21 +85,21 @@ export interface Queue {
  * ```
  */
 export function createQueue(config: QueueConfig): Queue {
-  // Create managers
-  const assetManager = new AssetManager();
-  const lockManager = new LockManager(config);
-  const stateManager = new StateManager();
-  const reconciler = new Reconciler(assetManager, lockManager, stateManager, config);
-  const processor = new Processor(assetManager, lockManager, stateManager, reconciler);
+	// Create managers
+	const assetManager = new AssetManager();
+	const lockManager = new LockManager(config);
+	const stateManager = new StateManager();
+	const reconciler = new Reconciler(assetManager, lockManager, stateManager, config);
+	const processor = new Processor(assetManager, lockManager, stateManager, reconciler);
 
-  return {
-    assetManager,
-    lockManager,
-    stateManager,
-    reconciler,
-    processor,
-    config,
-  };
+	return {
+		assetManager,
+		lockManager,
+		stateManager,
+		reconciler,
+		processor,
+		config,
+	};
 }
 
 /**
@@ -110,24 +110,24 @@ export function createQueue(config: QueueConfig): Queue {
  * @returns Initialized frontmatter object
  */
 export function createFrontmatter(
-  type: string,
-  sourcePath?: string
+	type: string,
+	sourcePath?: string,
 ): Frontmatter {
-  return {
-    type,
-    status: {
-      phase: 'pending',
-      last_update: new Date().toISOString(),
-      attempts: 0,
-      lock: null,
-    },
-    source: sourcePath
-      ? {
-          path: sourcePath,
-        }
-      : undefined,
-    timestamp: new Date().toISOString(),
-  };
+	return {
+		type,
+		status: {
+			phase: 'pending',
+			last_update: new Date().toISOString(),
+			attempts: 0,
+			lock: null,
+		},
+		source: sourcePath
+			? {
+					path: sourcePath,
+				}
+			: undefined,
+		timestamp: new Date().toISOString(),
+	};
 }
 
 /**
@@ -137,16 +137,16 @@ export function createFrontmatter(
  * @returns Parsed lock or null
  */
 export function parseLock(lockString: string): Lock | null {
-  const parts = lockString.split(':');
-  if (parts.length !== 3) return null;
+	const parts = lockString.split(':');
+	if (parts.length !== 3) { return null; }
 
-  const [host, pidStr, timestampStr] = parts;
-  const pid = parseInt(pidStr, 10);
-  const timestamp = parseInt(timestampStr, 10);
+	const [host, pidStr, timestampStr] = parts;
+	const pid = Number.parseInt(pidStr, 10);
+	const timestamp = Number.parseInt(timestampStr, 10);
 
-  if (isNaN(pid) || isNaN(timestamp)) return null;
+	if (isNaN(pid) || isNaN(timestamp)) { return null; }
 
-  return { host, pid, timestamp };
+	return { host, pid, timestamp };
 }
 
 /**
@@ -157,12 +157,12 @@ export function parseLock(lockString: string): Lock | null {
  * @returns True if stale
  */
 export function isLockStale(
-  lockString: string,
-  timeoutMs: number = 5 * 60 * 1000
+	lockString: string,
+	timeoutMs: number = 5 * 60 * 1000,
 ): boolean {
-  const lock = parseLock(lockString);
-  if (!lock) return true; // Invalid lock is considered stale
+	const lock = parseLock(lockString);
+	if (!lock) { return true; } // Invalid lock is considered stale
 
-  const now = Date.now();
-  return now - lock.timestamp > timeoutMs;
+	const now = Date.now();
+	return now - lock.timestamp > timeoutMs;
 }
