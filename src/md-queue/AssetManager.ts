@@ -225,13 +225,13 @@ export class AssetManager {
 	 */
 	protected deepMerge<T>(target: T, source: Partial<T>): T {
 		// Create a copy of target
-		const result: any = Array.isArray(target) ? [...target] : { ...target };
+		const result = (Array.isArray(target) ? [...target] : { ...target }) as T;
 
 		// Merge source into result
 		for (const key in source) {
 			if (Object.prototype.hasOwnProperty.call(source, key)) {
 				const sourceValue = source[key];
-				const targetValue = (target as any)[key];
+				const targetValue = (target as Record<string, unknown>)[key];
 
 				if (sourceValue === undefined) {
 					continue;
@@ -246,11 +246,11 @@ export class AssetManager {
 					&& targetValue !== null
 					&& !Array.isArray(targetValue)
 				) {
-					result[key] = this.deepMerge(targetValue, sourceValue);
+					(result as Record<string, unknown>)[key] = this.deepMerge(targetValue, sourceValue);
 				}
 				else {
 					// Otherwise, replace value (arrays are replaced, not merged)
-					result[key] = sourceValue;
+					(result as Record<string, unknown>)[key] = sourceValue;
 				}
 			}
 		}

@@ -59,7 +59,7 @@ export class Processor {
 			const result = await handler(item);
 
 			// Mark as done
-			await this.completeSuccess(item, result);
+			await this.completeSuccess(item, result as Record<string, unknown>);
 
 			return result;
 		}
@@ -223,7 +223,7 @@ export class Processor {
 	 */
 	protected async completeSuccess(
 		item: QueueItem,
-		result: any,
+		result: Record<string, unknown>,
 	): Promise<void> {
 		await this.stateManager.markDone(item, result, this.assetManager);
 	}

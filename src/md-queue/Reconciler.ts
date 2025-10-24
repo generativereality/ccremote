@@ -29,7 +29,7 @@ export class Reconciler {
 		assetManager: AssetManager,
 		lockManager: LockManager,
 		stateManager: StateManager,
-		config?: Partial<QueueConfig>,
+		_config?: Partial<QueueConfig>,
 	) {
 		this.assetManager = assetManager;
 		this.lockManager = lockManager;

@@ -46,7 +46,7 @@ export class LockManager {
 		const pid = Number.parseInt(pidStr, 10);
 		const timestamp = Number.parseInt(timestampStr, 10);
 
-		if (isNaN(pid) || isNaN(timestamp)) {
+		if (Number.isNaN(pid) || Number.isNaN(timestamp)) {
 			return null;
 		}
 

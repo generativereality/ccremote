@@ -138,13 +138,17 @@ export function createFrontmatter(
  */
 export function parseLock(lockString: string): Lock | null {
 	const parts = lockString.split(':');
-	if (parts.length !== 3) { return null; }
+	if (parts.length !== 3) {
+		return null;
+	}
 
 	const [host, pidStr, timestampStr] = parts;
 	const pid = Number.parseInt(pidStr, 10);
 	const timestamp = Number.parseInt(timestampStr, 10);
 
-	if (isNaN(pid) || isNaN(timestamp)) { return null; }
+	if (Number.isNaN(pid) || Number.isNaN(timestamp)) {
+		return null;
+	}
 
 	return { host, pid, timestamp };
 }
@@ -161,7 +165,9 @@ export function isLockStale(
 	timeoutMs: number = 5 * 60 * 1000,
 ): boolean {
 	const lock = parseLock(lockString);
-	if (!lock) { return true; } // Invalid lock is considered stale
+	if (!lock) {
+		return true; // Invalid lock is considered stale
+	}
 
 	const now = Date.now();
 	return now - lock.timestamp > timeoutMs;
