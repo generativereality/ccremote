@@ -81,6 +81,15 @@ export const cleanCommand = define({
 				let reason = '';
 
 				const tmuxExists = await tmuxManager.sessionExists(session.tmuxSession);
+				const daemonInfo = daemonManager.getDaemon(session.id);
+				const daemonRunning = daemonInfo !== null;
+
+				// Rule 0: NEVER clean if daemon is running - it's actively monitoring
+				// This prevents race conditions where status might be temporarily 'ended'
+				if (daemonRunning) {
+					consola.info(`Session ${session.id} daemon is running - skipping cleanup`);
+					continue;
+				}
 
 				// Rule 1: If explicitly marked as ended, double-check tmux is actually dead
 				// This prevents cleaning sessions that were incorrectly marked as ended
@@ -93,7 +102,7 @@ export const cleanCommand = define({
 						consola.warn(`Session ${session.id} marked as ended but tmux is still active - skipping cleanup`);
 					}
 				}
-				// Rule 2: If tmux session is dead, clean it (session is definitely not in use)
+				// Rule 2: If tmux session is dead AND no daemon, clean it (session is definitely not in use)
 				else if (!tmuxExists) {
 					shouldClean = true;
 					reason = 'tmux session dead';
