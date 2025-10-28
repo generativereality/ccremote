@@ -85,16 +85,58 @@ export class DiscordBot {
 
 	private async performLogin(token: string): Promise<void> {
 		return new Promise((resolve, reject) => {
+			let settled = false; // Track if promise has been resolved/rejected
+			let timeoutId: NodeJS.Timeout;
+
+			const cleanup = (): void => {
+				settled = true;
+				clearTimeout(timeoutId);
+			};
+
 			// Add timeout to prevent hanging forever
-			const timeout = setTimeout(() => {
+			timeoutId = setTimeout(() => {
+				if (settled) {
+					return;
+				}
 				const error = new Error('Opening handshake has timed out');
 				console.error('[DISCORD] Discord bot login timed out after 30 seconds');
+				cleanup();
 				reject(error);
 			}, 30000);
 
+			// Set up error handler FIRST to catch any errors during connection
+			// This includes WebSocket errors that might occur during handshake
+			const errorHandler = (error: Error): void => {
+				if (settled) {
+					return;
+				}
+				console.error('[DISCORD] Discord client error during startup:', error);
+				cleanup();
+				reject(error);
+			};
+
+			// Attach error handler to catch all errors during login
+			this.client.once(Events.Error, errorHandler);
+
+			// Also catch any WebSocket errors directly (in case they bypass Events.Error)
+			const wsErrorHandler = (error: Error): void => {
+				console.warn('[DISCORD] WebSocket error during connection:', error.message);
+				// Don't reject here - let the main error handler deal with it
+				// This is just for logging
+			};
+
+			// Access the WebSocket and add error handler if it exists
+			if (this.client.ws) {
+				// @ts-expect-error - 'error' is not in GatewayDispatchEvents but is a valid WebSocket event
+				this.client.ws.once('error', wsErrorHandler);
+			}
+
 			this.client.once(Events.ClientReady, () => {
+				if (settled) {
+					return;
+				}
 				console.info('[DISCORD] ClientReady event fired!');
-				clearTimeout(timeout);
+				cleanup();
 				this.isReady = true;
 				this.readyTimestamp = Date.now();
 
@@ -112,13 +154,6 @@ export class DiscordBot {
 				resolve();
 			});
 
-			// Add error handler
-			this.client.once(Events.Error, (error) => {
-				console.error('[DISCORD] Discord client error during startup:', error);
-				clearTimeout(timeout);
-				reject(error);
-			});
-
 			// Now login - the event will fire after this
 			console.info('[DISCORD] Calling client.login()...');
 			this.client.login(token)
@@ -126,8 +161,11 @@ export class DiscordBot {
 					console.info('[DISCORD] client.login() resolved successfully');
 				})
 				.catch((error) => {
+					if (settled) {
+						return;
+					}
 					console.error('[DISCORD] Login failed:', error);
-					clearTimeout(timeout);
+					cleanup();
 					reject(error);
 				});
 		});
@@ -142,8 +180,18 @@ export class DiscordBot {
 		});
 
 		this.client.on(Events.Error, (error) => {
-			console.error('Discord client error:', error);
+			console.error('[DISCORD] Client error (runtime):', error.message || error);
+			// Don't crash - just log the error
 		});
+
+		// Handle WebSocket errors during runtime (not just during connection)
+		if (this.client.ws) {
+			// eslint-disable-next-line ts/no-unsafe-argument
+			this.client.ws.on('error' as any, (error: Error) => {
+				console.warn('[DISCORD] WebSocket error (runtime):', error.message || error);
+				// Don't crash - errors during runtime should trigger reconnection via health check
+			});
+		}
 	}
 
 	private async handleMessage(message: Message): Promise<void> {
@@ -462,47 +510,54 @@ export class DiscordBot {
 
 	/**
 	 * Delete a Discord channel and send a final message before deletion
+	 * Returns true if deletion succeeded, false if bot lacks permissions
 	 */
-	private async deleteChannel(channelId: string, finalMessage: string, deleteReason: string): Promise<void> {
-		const channel = await this.client.channels.fetch(channelId) as TextChannel;
-		if (!channel || channel.type !== ChannelType.GuildText) {
-			return;
-		}
-
-		const guild = channel.guild;
-		const botMember = guild.members.me;
-
-		// Ensure bot has access to the channel before trying to send a message
-		if (botMember) {
-			try {
-				await channel.permissionOverwrites.edit(botMember, {
-					ViewChannel: true,
-					SendMessages: true,
-					ReadMessageHistory: true,
-				});
+	private async deleteChannel(channelId: string, finalMessage: string, deleteReason: string): Promise<boolean> {
+		try {
+			const channel = await this.client.channels.fetch(channelId) as TextChannel;
+			if (!channel || channel.type !== ChannelType.GuildText) {
+				return false;
 			}
-			catch (permError) {
-				console.warn(`Failed to ensure bot permissions for channel ${channelId}:`, permError);
-				// Continue anyway - we might still be able to delete without sending a message
+
+			const guild = channel.guild;
+			const botMember = guild.members.me;
+
+			// Check if bot has permissions to manage this channel before attempting anything
+			if (botMember) {
+				const botPermissions = channel.permissionsFor(botMember);
+				if (!botPermissions?.has(PermissionFlagsBits.ManageChannels)) {
+					console.warn(`[DISCORD] Bot lacks ManageChannels permission for channel ${channelId} (${channel.name}) - skipping`);
+					return false;
+				}
 			}
+
+			// Try to send a final message before deletion (but don't fail if we can't)
+			await safeDiscordOperation(
+				async () => {
+					await channel.send(finalMessage);
+				},
+				'send deletion notification',
+				{ warn: console.warn, debug: console.info },
+				{
+					maxRetries: 1,
+					baseDelayMs: 1000,
+				},
+			);
+
+			// Wait briefly for the message to be sent, then delete the channel
+			await new Promise(resolve => setTimeout(resolve, 2000));
+			await channel.delete(deleteReason);
+			return true;
 		}
-
-		// Try to send a final message before deletion (but don't fail if we can't)
-		await safeDiscordOperation(
-			async () => {
-				await channel.send(finalMessage);
-			},
-			'send deletion notification',
-			{ warn: console.warn, debug: console.info },
-			{
-				maxRetries: 1,
-				baseDelayMs: 1000,
-			},
-		);
-
-		// Wait briefly for the message to be sent, then delete the channel
-		await new Promise(resolve => setTimeout(resolve, 2000));
-		await channel.delete(deleteReason);
+		catch (error: any) {
+			// Check if this is a permissions error
+			if (error?.code === 50001 || error?.message?.includes('Missing Access')) {
+				console.warn(`[DISCORD] Missing permissions to delete channel ${channelId} - skipping`);
+				return false;
+			}
+			// Re-throw other errors
+			throw error;
+		}
 	}
 
 	async cleanupSessionChannel(sessionId: string): Promise<void> {
@@ -744,24 +799,27 @@ export class DiscordBot {
 	 */
 	async deleteOrphanedChannel(channelId: string): Promise<boolean> {
 		try {
-			await this.deleteChannel(
+			const deleted = await this.deleteChannel(
 				channelId,
 				'🏁 Orphaned channel detected during cleanup. This channel will be deleted.',
 				'Orphaned channel cleanup',
 			);
 
-			// Clean up our internal mappings
-			this.channelSessionMap.delete(channelId);
-			// Find and remove any sessionId mappings that point to this channel
-			for (const [sessionId, mappedChannelId] of this.sessionChannelMap.entries()) {
-				if (mappedChannelId === channelId) {
-					this.sessionChannelMap.delete(sessionId);
-					break;
+			if (deleted) {
+				// Clean up our internal mappings
+				this.channelSessionMap.delete(channelId);
+				// Find and remove any sessionId mappings that point to this channel
+				for (const [sessionId, mappedChannelId] of this.sessionChannelMap.entries()) {
+					if (mappedChannelId === channelId) {
+						this.sessionChannelMap.delete(sessionId);
+						break;
+					}
 				}
+
+				console.info(`[DISCORD] Deleted orphaned channel ${channelId}`);
 			}
 
-			console.info(`[DISCORD] Deleted orphaned channel`);
-			return true;
+			return deleted;
 		}
 		catch (error) {
 			console.warn(`[DISCORD] Failed to delete orphaned channel ${channelId}:`, error);

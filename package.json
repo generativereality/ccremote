@@ -21,7 +21,19 @@
     "remote"
   ],
   "exports": {
-    ".": "./dist/index.js"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./md-queue": {
+      "types": "./src/md-queue/index.ts",
+      "default": "./src/md-queue/index.ts"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "md-queue": ["./src/md-queue/index.ts"]
+    }
   },
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -33,7 +45,7 @@
     "dist"
   ],
   "engines": {
-    "node": ">=20.19.4"
+    "node": ">=18.0.0"
   },
   "scripts": {
     "build": "tsdown",
@@ -43,8 +55,8 @@
     "prepack": "bun run build",
     "prepublishOnly": "npx publint --pack npm",
     "check": "bun lint && bun typecheck && vitest run && bun run build",
-    "release": "echo '🚀 Starting release process...' && git branch --show-current | grep -q '^main$' && bun run check && npm pack && echo '📦 Package created. Testing locally...' && npm install -g ./ccremote-*.tgz && ccremote --version && echo '✅ Local test passed! Creating tag for current version...' && npx bumpp $(node -p \"require('./package.json').version\") --yes && npm publish && echo '🎉 Release complete!'",
-    "release:test": "bun run check && npm pack && npm install -g ./ccremote-*.tgz && ccremote --version && echo '✅ Package tests passed!'",
+    "release": "echo '🚀 Starting release process...' && git branch --show-current | grep -q '^main$' && bun run check && npm pack && echo '📦 Package created. Testing locally...' && npm install -g ./ccremote-*.tgz --registry=$(npm config get registry) --no-audit && ccremote --version && echo '✅ Local test passed! Creating tag for current version...' && npx bumpp $(node -p \"require('./package.json').version\") --yes && npm publish && echo '🎉 Release complete!'",
+    "release:test": "bun run check && npm pack && (npm uninstall -g ccremote --registry=$(npm config get registry) 2>/dev/null || true) && npm install -g ./ccremote-*.tgz --registry=$(npm config get registry) --no-audit && ccremote --version && echo '✅ Package tests passed!'",
     "start": "bun run ./src/index.ts",
     "test": "vitest",
     "typecheck": "tsc --noEmit",
@@ -76,6 +88,7 @@
     "dotenv": "^17.2.2",
     "pm2": "^6.0.10",
     "update-notifier": "^7.3.1",
+    "yaml": "^2.8.1",
     "zod": "^3.25.67"
   }
 }

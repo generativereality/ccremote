@@ -81,6 +81,15 @@ export const cleanCommand = define({
 				let reason = '';
 
 				const tmuxExists = await tmuxManager.sessionExists(session.tmuxSession);
+				const daemonInfo = daemonManager.getDaemon(session.id);
+				const daemonRunning = daemonInfo !== null;
+
+				// Rule 0: NEVER clean if daemon is running - it's actively monitoring
+				// This prevents race conditions where status might be temporarily 'ended'
+				if (daemonRunning) {
+					consola.info(`Session ${session.id} daemon is running - skipping cleanup`);
+					continue;
+				}
 
 				// Rule 1: If explicitly marked as ended, double-check tmux is actually dead
 				// This prevents cleaning sessions that were incorrectly marked as ended
@@ -93,7 +102,7 @@ export const cleanCommand = define({
 						consola.warn(`Session ${session.id} marked as ended but tmux is still active - skipping cleanup`);
 					}
 				}
-				// Rule 2: If tmux session is dead, clean it (session is definitely not in use)
+				// Rule 2: If tmux session is dead AND no daemon, clean it (session is definitely not in use)
 				else if (!tmuxExists) {
 					shouldClean = true;
 					reason = 'tmux session dead';
@@ -225,6 +234,7 @@ export const cleanCommand = define({
 
 			// Delete Discord channels for ended sessions
 			let deletedChannels = 0;
+			let skippedChannels = 0;
 			if (discordBot) {
 				// Delete channels for sessions being cleaned up
 				for (const session of cleanupSessions) {
@@ -247,6 +257,10 @@ export const cleanCommand = define({
 								deletedChannels++;
 								consola.info(`📺 Deleted orphaned Discord channel ${channelId}`);
 							}
+							else {
+								skippedChannels++;
+								consola.info(`⏭️  Skipped orphaned channel ${channelId} (insufficient permissions)`);
+							}
 						}
 						catch (error: unknown) {
 							consola.warn(`Failed to delete orphaned channel ${channelId}: ${error instanceof Error ? error.message : String(error)}`);
@@ -262,6 +276,10 @@ export const cleanCommand = define({
 							if (success) {
 								deletedChannels++;
 								consola.info(`📺 Deleted archived Discord channel ${channelId}`);
+							}
+							else {
+								skippedChannels++;
+								consola.info(`⏭️  Skipped archived channel ${channelId} (insufficient permissions)`);
 							}
 						}
 						catch (error: unknown) {
@@ -305,7 +323,34 @@ export const cleanCommand = define({
 			consola.info(`  • Archived ${archivedCount} log files`);
 			if (discordBot) {
 				consola.info(`  • Deleted ${deletedChannels} Discord channels`);
+				if (skippedChannels > 0) {
+					consola.info(`  • Skipped ${skippedChannels} channels (insufficient permissions)`);
+				}
 				await discordBot.shutdown();
+			}
+
+			// Show permission fix instructions if channels were skipped
+			if (skippedChannels > 0) {
+				consola.box(
+					'⚠️  Permission Error - Some Discord channels could not be deleted\n\n'
+					+ 'Your Discord bot lacks the required permissions to delete these channels.\n\n'
+					+ 'To fix this, you have two options:\n\n'
+					+ '1. Administrator permission (recommended):\n'
+					+ '   • Go to Discord Developer Portal → OAuth2 → URL Generator\n'
+					+ '   • Select scope: bot\n'
+					+ '   • Select permission: Administrator\n'
+					+ '   • Use the generated URL to re-invite your bot\n\n'
+					+ '2. Minimal permissions:\n'
+					+ '   • Manage Channels (create/delete session channels)\n'
+					+ '   • Manage Roles (edit channel overwrites)\n'
+					+ '   • Send Messages (send notifications)\n'
+					+ '   • Read Message History (read approval responses)\n\n'
+					+ 'Note: Administrator permission is recommended as it avoids role\n'
+					+ 'hierarchy issues and ensures reliable channel management.\n\n'
+					+ 'After updating permissions, run "ccremote clean" again to remove\n'
+					+ 'the remaining channels.\n\n'
+					+ 'See: https://github.com/generativereality/ccremote#discord-setup',
+				);
 			}
 		}
 		catch (error: unknown) {
