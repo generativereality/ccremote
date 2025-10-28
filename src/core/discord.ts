@@ -85,16 +85,58 @@ export class DiscordBot {
 
 	private async performLogin(token: string): Promise<void> {
 		return new Promise((resolve, reject) => {
+			let settled = false; // Track if promise has been resolved/rejected
+			let timeoutId: NodeJS.Timeout;
+
+			const cleanup = (): void => {
+				settled = true;
+				clearTimeout(timeoutId);
+			};
+
 			// Add timeout to prevent hanging forever
-			const timeout = setTimeout(() => {
+			timeoutId = setTimeout(() => {
+				if (settled) {
+					return;
+				}
 				const error = new Error('Opening handshake has timed out');
 				console.error('[DISCORD] Discord bot login timed out after 30 seconds');
+				cleanup();
 				reject(error);
 			}, 30000);
 
+			// Set up error handler FIRST to catch any errors during connection
+			// This includes WebSocket errors that might occur during handshake
+			const errorHandler = (error: Error): void => {
+				if (settled) {
+					return;
+				}
+				console.error('[DISCORD] Discord client error during startup:', error);
+				cleanup();
+				reject(error);
+			};
+
+			// Attach error handler to catch all errors during login
+			this.client.once(Events.Error, errorHandler);
+
+			// Also catch any WebSocket errors directly (in case they bypass Events.Error)
+			const wsErrorHandler = (error: Error): void => {
+				console.warn('[DISCORD] WebSocket error during connection:', error.message);
+				// Don't reject here - let the main error handler deal with it
+				// This is just for logging
+			};
+
+			// Access the WebSocket and add error handler if it exists
+			if (this.client.ws) {
+				// @ts-expect-error - 'error' is not in GatewayDispatchEvents but is a valid WebSocket event
+				this.client.ws.once('error', wsErrorHandler);
+			}
+
 			this.client.once(Events.ClientReady, () => {
+				if (settled) {
+					return;
+				}
 				console.info('[DISCORD] ClientReady event fired!');
-				clearTimeout(timeout);
+				cleanup();
 				this.isReady = true;
 				this.readyTimestamp = Date.now();
 
@@ -112,13 +154,6 @@ export class DiscordBot {
 				resolve();
 			});
 
-			// Add error handler
-			this.client.once(Events.Error, (error) => {
-				console.error('[DISCORD] Discord client error during startup:', error);
-				clearTimeout(timeout);
-				reject(error);
-			});
-
 			// Now login - the event will fire after this
 			console.info('[DISCORD] Calling client.login()...');
 			this.client.login(token)
@@ -126,8 +161,11 @@ export class DiscordBot {
 					console.info('[DISCORD] client.login() resolved successfully');
 				})
 				.catch((error) => {
+					if (settled) {
+						return;
+					}
 					console.error('[DISCORD] Login failed:', error);
-					clearTimeout(timeout);
+					cleanup();
 					reject(error);
 				});
 		});
@@ -142,8 +180,18 @@ export class DiscordBot {
 		});
 
 		this.client.on(Events.Error, (error) => {
-			console.error('Discord client error:', error);
+			console.error('[DISCORD] Client error (runtime):', error.message || error);
+			// Don't crash - just log the error
 		});
+
+		// Handle WebSocket errors during runtime (not just during connection)
+		if (this.client.ws) {
+			// eslint-disable-next-line ts/no-unsafe-argument
+			this.client.ws.on('error' as any, (error: Error) => {
+				console.warn('[DISCORD] WebSocket error (runtime):', error.message || error);
+				// Don't crash - errors during runtime should trigger reconnection via health check
+			});
+		}
 	}
 
 	private async handleMessage(message: Message): Promise<void> {

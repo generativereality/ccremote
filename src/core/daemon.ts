@@ -63,9 +63,45 @@ export class Daemon {
 	}
 
 	/**
+	 * Set up global error handlers to prevent uncaught errors from crashing the daemon
+	 */
+	private setupGlobalErrorHandlers(): void {
+		// Catch unhandled promise rejections
+		process.on('unhandledRejection', (reason: any, _promise: Promise<any>) => {
+			this.log('ERROR', `Unhandled Promise Rejection: ${reason instanceof Error ? reason.message : String(reason)}`);
+			if (reason instanceof Error && reason.stack) {
+				this.log('ERROR', `Stack trace: ${reason.stack}`);
+			}
+		});
+
+		// Catch uncaught exceptions
+		process.on('uncaughtException', (error: Error) => {
+			this.log('ERROR', `Uncaught Exception: ${error.message}`);
+			if (error.stack) {
+				this.log('ERROR', `Stack trace: ${error.stack}`);
+			}
+
+			// For critical errors, attempt graceful shutdown
+			// But don't exit immediately - give other cleanup a chance
+			setTimeout(() => {
+				this.log('ERROR', 'Daemon exiting due to uncaught exception');
+				process.exit(1);
+			}, 1000);
+		});
+
+		// Catch warnings (like unhandled error events)
+		process.on('warning', (warning: Error) => {
+			this.log('WARN', `Process warning: ${warning.name} - ${warning.message}`);
+		});
+	}
+
+	/**
 	 * Start the daemon process
 	 */
 	async start(): Promise<void> {
+		// Set up global error handlers FIRST to catch any errors during startup
+		this.setupGlobalErrorHandlers();
+
 		try {
 			this.log('INFO', `Daemon starting for session ${this.config.sessionId} (PID: ${process.pid})`);
 			this.log('INFO', `Working directory: ${process.cwd()}`);

@@ -162,6 +162,15 @@ export const startCommand = define({
 				process.exit(1);
 			}
 
+			// Check if tmux server is responsive
+			const healthCheck = await tmuxManager.isTmuxHealthy();
+			if (!healthCheck.healthy) {
+				consola.error('tmux server is frozen or unresponsive');
+				consola.error('');
+				consola.error(healthCheck.error || 'Unknown error');
+				process.exit(1);
+			}
+
 			await sessionManager.initialize();
 
 			// Create session
