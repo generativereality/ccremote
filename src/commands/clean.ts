@@ -328,6 +328,30 @@ export const cleanCommand = define({
 				}
 				await discordBot.shutdown();
 			}
+
+			// Show permission fix instructions if channels were skipped
+			if (skippedChannels > 0) {
+				consola.box(
+					'⚠️  Permission Error - Some Discord channels could not be deleted\n\n'
+					+ 'Your Discord bot lacks the required permissions to delete these channels.\n\n'
+					+ 'To fix this, you have two options:\n\n'
+					+ '1. Administrator permission (recommended):\n'
+					+ '   • Go to Discord Developer Portal → OAuth2 → URL Generator\n'
+					+ '   • Select scope: bot\n'
+					+ '   • Select permission: Administrator\n'
+					+ '   • Use the generated URL to re-invite your bot\n\n'
+					+ '2. Minimal permissions:\n'
+					+ '   • Manage Channels (create/delete session channels)\n'
+					+ '   • Manage Roles (edit channel overwrites)\n'
+					+ '   • Send Messages (send notifications)\n'
+					+ '   • Read Message History (read approval responses)\n\n'
+					+ 'Note: Administrator permission is recommended as it avoids role\n'
+					+ 'hierarchy issues and ensures reliable channel management.\n\n'
+					+ 'After updating permissions, run "ccremote clean" again to remove\n'
+					+ 'the remaining channels.\n\n'
+					+ 'See: https://github.com/generativereality/ccremote#discord-setup',
+				);
+			}
 		}
 		catch (error: unknown) {
 			consola.error('Failed to clean sessions:', error instanceof Error ? error.message : String(error));
