@@ -25,6 +25,9 @@ export default withMermaid(defineConfig({
 		['meta', { property: 'og:url', content: 'https://ccremote.dev' }],
 		['meta', { name: 'twitter:card', content: 'summary_large_image' }],
 		['meta', { name: 'twitter:image', content: 'https://ccremote.dev/og-image.png' }],
+		// Cookieless GA4 — no consent banner required
+		['script', { async: '', src: 'https://www.googletagmanager.com/gtag/js?id=G-7TQ1EL0TFC' }],
+		['script', {}, `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('consent','default',{ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied',analytics_storage:'granted'});gtag('js',new Date());gtag('config','G-7TQ1EL0TFC',{client_storage:'none',anonymize_ip:true,allow_google_signals:false,allow_ad_personalization_signals:false});`],
 	],
 
 	themeConfig: {
