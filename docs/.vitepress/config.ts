@@ -28,6 +28,8 @@ export default withMermaid(defineConfig({
 		// Cookieless GA4 — no consent banner required
 		['script', { async: '', src: 'https://www.googletagmanager.com/gtag/js?id=G-7TQ1EL0TFC' }],
 		['script', {}, `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('consent','default',{ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied',analytics_storage:'granted'});gtag('js',new Date());gtag('config','G-7TQ1EL0TFC',{client_storage:'none',anonymize_ip:true,allow_google_signals:false,allow_ad_personalization_signals:false});`],
+		// Cloudflare Web Analytics — explicit injection; CF auto-inject is unreliable on this Pages project
+		['script', { defer: '', src: 'https://static.cloudflareinsights.com/beacon.min.js', 'data-cf-beacon': '{"token": "171bfef0d6d741449df97f003fcd30a6"}' }],
 	],
 
 	themeConfig: {
