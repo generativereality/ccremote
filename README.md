@@ -8,6 +8,15 @@
     <a href="https://packagephobia.com/result?p=ccremote"><img src="https://packagephobia.com/badge?p=ccremote" alt="install size" /></a>
 </p>
 
+> ## ⚠️ No longer in active development
+>
+> Two things landed that made ccremote redundant:
+>
+> - **Claude Code now ships its own remote-control feature**, significantly better than the Discord + tmux workaround ccremote was built around.
+> - For driving **multiple Claude Code sessions in parallel** — the deeper use case behind ccremote — the right tool is now **[cctabs](https://cctabs.com)**: terminal tabs as the UI, native parallelism, fork/restore/resume, no tmux.
+>
+> The published `ccremote` package remains installable and the source remains as-is for anyone still relying on it, but expect no further releases or bug fixes. The repository will be archived shortly.
+
 ## Claude Code Remote
 
 1. **Approve prompts from Discord**
